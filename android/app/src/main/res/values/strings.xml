@@ -2,4 +2,5 @@
   <string name="app_name">Appace</string>
   <string name="expo_splash_screen_resize_mode" translatable="false">contain</string>
   <string name="expo_splash_screen_status_bar_translucent" translatable="false">false</string>
+  <string name="accessibility_description">Appace monitors which app is in the foreground to track screen time against your daily balance.</string>
 </resources>
