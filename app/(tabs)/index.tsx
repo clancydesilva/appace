@@ -1,7 +1,15 @@
+import { useEffect } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import ScreenTime from '../../modules/screen-time';
 
 // Placeholder — replaced in Phase 5 with live balance display
 export default function HomeScreen() {
+  useEffect(() => {
+    ScreenTime.getBalance()
+      .then(b => console.log('Balance:', b))
+      .catch(e => console.error('Error getting balance:', e));
+  }, []);
+
   return (
     <View style={styles.container}>
       <Text style={styles.label}>Balance</Text>

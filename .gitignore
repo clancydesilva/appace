@@ -39,3 +39,12 @@ yarn-error.*
 # generated native folders
 /ios
 # /android is intentionally tracked — manually patched post-prebuild
+
+# Gradle build outputs
+/android/build/
+/android/app/build/
+/android/.gradle/
+/modules/*/android/build/
+/modules/*/android/.gradle/
+/modules/*/node_modules/
+
