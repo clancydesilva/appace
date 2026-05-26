@@ -24,7 +24,10 @@ class BalanceRepository(context: Context) {
         }
     }
 
-    fun getBalance(): BalanceEntity = dao.getBalance()!!
+    fun getBalance(): BalanceEntity {
+        initIfEmpty()
+        return dao.getBalance()!!
+    }
 
     fun hasTimeRemaining(): Boolean = getBalance().balanceSeconds > 0
 

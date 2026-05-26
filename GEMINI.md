@@ -1,11 +1,11 @@
-# Appace — Claude Code Rules
+# Appace — Gemini Code Rules
 
 ## Project
 
 Android screen time app built with React Native + Expo + Kotlin native module.
 Package: `com.clancy.appace`
 Stack: TypeScript (React Native/Expo), Kotlin (native module), Room DB, WorkManager, Accessibility Service.
-See `IMPLEMENTATION_PLAN.md` for full architecture and build order.
+See `technical_plan.md` for full architecture and build order.
 
 ## Work Style — NON-NEGOTIABLE
 
@@ -14,6 +14,16 @@ See `IMPLEMENTATION_PLAN.md` for full architecture and build order.
 - After completing any unit of work, stop and summarise what was done before continuing.
 - If a task feels large, break it down and confirm the breakdown with me before starting.
 - Never refactor, reorganise, or "improve" code I didn't ask you to touch.
+
+## Testing & Logging Workflow — Required on Every Test Cycle
+
+Every test run and debug cycle must be tracked to maintain a clean history of issues and modifications:
+- **Automated Terminal Logging**: Launch the app using the command `./run-and-log.ps1` to automatically output and save console/Metro logs to a timestamped file under `logs/`.
+- **Change & Test History**: Record test logs in [testing_history.md](file:///c:/Users/clanc/Desktop/College/appace/testing_history.md). For every debug cycle:
+  1. Record the test run time and target functionality.
+  2. Document any crash stack traces or errors encountered.
+  3. Record what changes were made to fix the error.
+  4. Record the retry results.
 
 ## Git — Required on Every Commit
 
@@ -38,7 +48,7 @@ See `IMPLEMENTATION_PLAN.md` for full architecture and build order.
 ## Testing
 
 - Run tests before every commit — no exceptions.
-- For Kotlin: `./gradlew test` from the android/ directory.
+- For Kotlin: `./gradlew test` from the `android/` directory.
 - For JS/TS: `npm test` from project root.
 - If no tests exist yet for a component, write at least one basic test before committing that component.
 - When testing time-based logic (accrual, reset), use a short window (e.g. current hour + 2 mins) rather than waiting for real time to pass.
