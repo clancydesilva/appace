@@ -12,14 +12,16 @@ class AppWatcherService : AccessibilityService() {
     private var currentTrackedApp: String? = null
     private var usageStartTime: Long = 0
 
-    private val IGNORED_PACKAGES = setOf(
-        "com.android.systemui",
-        "com.android.launcher",
-        "com.android.launcher3",
-        "com.google.android.apps.nexuslauncher",
-        "com.sec.android.app.launcher",
-        packageName
-    )
+    private val IGNORED_PACKAGES by lazy {
+        setOf(
+            "com.android.systemui",
+            "com.android.launcher",
+            "com.android.launcher3",
+            "com.google.android.apps.nexuslauncher",
+            "com.sec.android.app.launcher",
+            packageName
+        )
+    }
 
     private fun getTrackedApps(): Set<String> {
         val prefs: SharedPreferences = getSharedPreferences("appace_prefs", MODE_PRIVATE)

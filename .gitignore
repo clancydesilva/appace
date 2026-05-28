@@ -48,3 +48,7 @@ yarn-error.*
 /modules/*/android/.gradle/
 /modules/*/node_modules/
 
+# Local logs
+logs/
+
+
