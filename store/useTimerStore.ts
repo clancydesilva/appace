@@ -11,6 +11,7 @@ interface TimerStore {
   installedApps: InstalledApp[];
   isWithinWindow: boolean;
   accessibilityEnabled: boolean;
+  batteryOptimizationIgnored: boolean;
 
   fetchBalance: () => Promise<void>;
   fetchSettings: () => Promise<void>;
@@ -18,11 +19,13 @@ interface TimerStore {
   fetchInstalledApps: () => Promise<void>;
   checkWindow: () => Promise<void>;
   checkAccessibility: () => Promise<void>;
+  checkBatteryOptimization: () => Promise<void>;
   setWindowHours: (start: number, end: number) => Promise<void>;
   setOpeningBalance: (mins: number) => Promise<void>;
   setHourlyAccrual: (mins: number) => Promise<void>;
   setTrackedApps: (pkgs: string[]) => Promise<void>;
   openAccessibilitySettings: () => Promise<void>;
+  openBatteryOptimizationSettings: () => Promise<void>;
   startService: () => Promise<void>;
 
   maxDailyMinutes: () => number;  // opening + ((hours-1) x accrual)
@@ -39,6 +42,7 @@ export const useTimerStore = create<TimerStore>((set, get) => ({
   installedApps: [],
   isWithinWindow: false,
   accessibilityEnabled: false,
+  batteryOptimizationIgnored: false,
 
   fetchBalance: async () => set({ balanceSeconds: await ScreenTime.getBalance() }),
 
@@ -56,6 +60,7 @@ export const useTimerStore = create<TimerStore>((set, get) => ({
   fetchInstalledApps: async () => set({ installedApps: await ScreenTime.getInstalledApps() }),
   checkWindow: async () => set({ isWithinWindow: await ScreenTime.isWithinWindow() }),
   checkAccessibility: async () => set({ accessibilityEnabled: await ScreenTime.isAccessibilityEnabled() }),
+  checkBatteryOptimization: async () => set({ batteryOptimizationIgnored: await ScreenTime.isBatteryOptimizationIgnored() }),
 
   setWindowHours: async (start, end) => {
     await ScreenTime.setWindowHours(start, end);
@@ -74,6 +79,7 @@ export const useTimerStore = create<TimerStore>((set, get) => ({
     set({ trackedApps: pkgs });
   },
   openAccessibilitySettings: async () => ScreenTime.openAccessibilitySettings(),
+  openBatteryOptimizationSettings: async () => ScreenTime.openBatteryOptimizationSettings(),
   startService: async () => ScreenTime.startForegroundService(),
 
   maxDailyMinutes: () => {
