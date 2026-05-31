@@ -129,6 +129,18 @@ class ExpoScreenTimeModule : Module() {
             context.startActivity(intent)
         }
 
+        AsyncFunction("isBatteryOptimizationIgnored") { ->
+            val pm = context.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+            pm.isIgnoringBatteryOptimizations(context.packageName)
+        }
+
+        AsyncFunction("openBatteryOptimizationSettings") { ->
+            val intent = Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            context.startActivity(intent)
+        }
+
         AsyncFunction("startForegroundService") { ->
             context.startForegroundService(Intent(context, ForegroundService::class.java))
         }
