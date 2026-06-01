@@ -146,6 +146,7 @@ class ExpoScreenTimeModule : Module() {
 
         AsyncFunction("startForegroundService") { ->
             context.startForegroundService(Intent(context, ForegroundService::class.java))
+            Unit
         }
     }
 }

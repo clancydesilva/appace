@@ -34,7 +34,7 @@ class BalanceRepository(context: Context) {
     fun isWithinWindow(): Boolean {
         val hour = LocalDateTime.now().hour
         val b = getBalance()
-        return hour >= b.windowStartHour && hour < b.windowEndHour % 24
+        return hour >= b.windowStartHour && hour < b.windowEndHour
     }
 
     fun deductSeconds(seconds: Long) {
@@ -57,21 +57,19 @@ class BalanceRepository(context: Context) {
     // Core daily logic — called by WorkManager every 15 mins. Idempotent by design.
     fun tick() {
         val now = LocalDateTime.now()
-        val current = getBalance()
+        var current = getBalance()
         val todayStr = now.toLocalDate().toString()
         val currentHour = now.hour
 
-        // 1. RESET — new day and we're at/past window end
-        if (todayStr != current.lastResetDate && currentHour >= current.windowEndHour % 24) {
-            dao.upsert(
-                current.copy(
-                    balanceSeconds = 0,
-                    lastResetDate = todayStr,
-                    windowOpenGrantedToday = false,
-                    lastAccrualHour = -1
-                )
+        // 1. RESET — new day, wipe previous day's state
+        if (todayStr != current.lastResetDate) {
+            current = current.copy(
+                balanceSeconds = 0,
+                lastResetDate = todayStr,
+                windowOpenGrantedToday = false,
+                lastAccrualHour = -1
             )
-            return
+            dao.upsert(current)
         }
 
         // 2. Outside window — do nothing
@@ -79,25 +77,23 @@ class BalanceRepository(context: Context) {
 
         // 3. OPENING BALANCE — grant once at window start if not yet done today
         if (!current.windowOpenGrantedToday) {
-            dao.upsert(
-                current.copy(
-                    balanceSeconds = current.balanceSeconds + current.openingBalanceSeconds,
-                    windowOpenGrantedToday = true,
-                    lastAccrualHour = current.windowStartHour
-                )
+            current = current.copy(
+                balanceSeconds = current.balanceSeconds + current.openingBalanceSeconds,
+                windowOpenGrantedToday = true,
+                lastAccrualHour = current.windowStartHour
             )
+            dao.upsert(current)
             return
         }
 
         // 4. HOURLY ACCRUAL — grant silently if we've moved into a new hour since last accrual
         // No notification fired here — silent drop by design
         if (currentHour > current.lastAccrualHour && currentHour < current.windowEndHour) {
-            dao.upsert(
-                current.copy(
-                    balanceSeconds = current.balanceSeconds + current.hourlyAccrualSeconds,
-                    lastAccrualHour = currentHour
-                )
+            current = current.copy(
+                balanceSeconds = current.balanceSeconds + current.hourlyAccrualSeconds,
+                lastAccrualHour = currentHour
             )
+            dao.upsert(current)
         }
     }
 }

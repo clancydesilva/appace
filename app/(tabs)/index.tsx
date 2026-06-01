@@ -58,6 +58,7 @@ export default function HomeScreen() {
   }, []);
 
   const refreshState = async () => {
+    await store.startService();
     await store.fetchBalance();
     await store.fetchSettings();
     await store.checkWindow();

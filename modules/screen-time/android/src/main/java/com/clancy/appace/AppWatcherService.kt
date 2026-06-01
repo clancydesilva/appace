@@ -31,7 +31,18 @@ class AppWatcherService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
         val pkg = event.packageName?.toString() ?: return
-        if (pkg in IGNORED_PACKAGES) return
+        if (pkg in IGNORED_PACKAGES) {
+            val prevApp = currentTrackedApp
+            val startTime = usageStartTime
+            if (prevApp != null) {
+                currentTrackedApp = null
+                scope.launch {
+                    val secondsUsed = (System.currentTimeMillis() - startTime) / 1000
+                    repo.deductSeconds(secondsUsed)
+                }
+            }
+            return
+        }
 
         val trackedApps = getTrackedApps()
 
