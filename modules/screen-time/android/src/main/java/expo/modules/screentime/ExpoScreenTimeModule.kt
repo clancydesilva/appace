@@ -63,6 +63,7 @@ class ExpoScreenTimeModule : Module() {
             scope.launch {
                 try {
                     repo.setWindowHours(start, end)
+                    repo.tick()
                     promise.resolve(null)
                 } catch (e: Exception) {
                     promise.reject("ERR_DB", e.message, e)
@@ -74,6 +75,7 @@ class ExpoScreenTimeModule : Module() {
             scope.launch {
                 try {
                     repo.setOpeningBalance(minutes)
+                    repo.tick()
                     promise.resolve(null)
                 } catch (e: Exception) {
                     promise.reject("ERR_DB", e.message, e)
@@ -85,6 +87,7 @@ class ExpoScreenTimeModule : Module() {
             scope.launch {
                 try {
                     repo.setHourlyAccrual(minutes)
+                    repo.tick()
                     promise.resolve(null)
                 } catch (e: Exception) {
                     promise.reject("ERR_DB", e.message, e)

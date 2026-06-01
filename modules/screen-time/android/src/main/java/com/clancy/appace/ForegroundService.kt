@@ -6,12 +6,15 @@ import android.app.Service
 import android.content.Intent
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import kotlinx.coroutines.*
 
 class ForegroundService : Service() {
 
     companion object {
         const val CHANNEL_ID = "appace_channel"
     }
+
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     override fun onCreate() {
         super.onCreate()
@@ -35,8 +38,20 @@ class ForegroundService : Service() {
             .build()
 
         startForeground(1, notification)
+
+        scope.launch {
+            val repo = BalanceRepository(applicationContext)
+            repo.initIfEmpty()
+            repo.tick()
+        }
+
         AccrualWorker.schedule(this)
         return START_STICKY
+    }
+
+    override fun onDestroy() {
+        scope.cancel()
+        super.onDestroy()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
