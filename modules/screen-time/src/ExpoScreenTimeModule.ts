@@ -8,6 +8,10 @@ declare class ExpoScreenTimeModule extends NativeModule {
   setWindowHours(start: number, end: number): Promise<void>;
   setOpeningBalance(minutes: number): Promise<void>;
   setHourlyAccrual(minutes: number): Promise<void>;
+  setBudgetType(type: string): Promise<void>;
+  setAccrualInterval(hours: number): Promise<void>;
+  isOnboardingCompleted(): Promise<boolean>;
+  setOnboardingCompleted(completed: boolean): Promise<void>;
   setTrackedApps(packages: string[]): Promise<void>;
   getTrackedApps(): Promise<string[]>;
   getInstalledApps(): Promise<InstalledApp[]>;

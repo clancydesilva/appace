@@ -39,7 +39,9 @@ class ExpoScreenTimeModule : Module() {
                         "windowStartHour" to b.windowStartHour,
                         "windowEndHour" to b.windowEndHour,
                         "openingBalanceMinutes" to (b.openingBalanceSeconds / 60).toInt(),
-                        "hourlyAccrualMinutes" to (b.hourlyAccrualSeconds / 60).toInt()
+                        "hourlyAccrualMinutes" to (b.hourlyAccrualSeconds / 60).toInt(),
+                        "budgetType" to b.budgetType,
+                        "accrualIntervalHours" to b.accrualIntervalHours
                     )
                     promise.resolve(settings)
                 } catch (e: Exception) {
@@ -95,6 +97,38 @@ class ExpoScreenTimeModule : Module() {
             }
         }
 
+        AsyncFunction("setBudgetType") { type: String, promise: Promise ->
+            scope.launch {
+                try {
+                    repo.setBudgetType(type)
+                    repo.tick()
+                    promise.resolve(null)
+                } catch (e: Exception) {
+                    promise.reject("ERR_DB", e.message, e)
+                }
+            }
+        }
+
+        AsyncFunction("setAccrualInterval") { hours: Int, promise: Promise ->
+            scope.launch {
+                try {
+                    repo.setAccrualInterval(hours)
+                    repo.tick()
+                    promise.resolve(null)
+                } catch (e: Exception) {
+                    promise.reject("ERR_DB", e.message, e)
+                }
+            }
+        }
+
+        AsyncFunction("isOnboardingCompleted") { ->
+            prefs.getBoolean("onboarding_completed", false)
+        }
+
+        AsyncFunction("setOnboardingCompleted") { completed: Boolean ->
+            prefs.edit().putBoolean("onboarding_completed", completed).apply()
+        }
+
         AsyncFunction("setTrackedApps") { packages: List<String> ->
             prefs.edit().putStringSet("tracked_apps", packages.toSet()).apply()
         }
@@ -122,6 +156,7 @@ class ExpoScreenTimeModule : Module() {
                 context.contentResolver,
                 android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
             ) ?: ""
+            services.contains("com.clancy.appace/com.clancy.appace.AppWatcherService") ||
             services.contains("com.clancy.appace/.AppWatcherService")
         }
 

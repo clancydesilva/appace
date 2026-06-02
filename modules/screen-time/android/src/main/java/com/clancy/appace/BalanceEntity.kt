@@ -13,5 +13,7 @@ data class BalanceEntity(
     val hourlyAccrualSeconds: Long,    // added silently each hour (default 300 = 5 mins)
     val lastAccrualHour: Int,          // prevents double-accrual in same hour (-1 = none yet)
     val lastResetDate: String,         // "YYYY-MM-DD" — which day was last reset
-    val windowOpenGrantedToday: Boolean // opening balance granted yet today?
+    val windowOpenGrantedToday: Boolean, // opening balance granted yet today?
+    val budgetType: String = "custom",
+    val accrualIntervalHours: Int = 1
 )

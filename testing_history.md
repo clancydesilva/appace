@@ -99,3 +99,24 @@ Use this file to log every test run, errors encountered, changes made, and verif
   * Room database state successfully updated to `1|1500|8|22|900|600|19|2026-06-01|1`.
   * User balance correctly updated to `1500` seconds (25 minutes: 15 mins opening + 10 mins hourly accrual), resolving the persistent `00:00` balance display.
   * Time switches to ignored packages are now correctly handled and seconds are deducted successfully.
+
+---
+
+## [2026-06-02 21:15] Phase 5 Presets UI & Onboarding Integration
+
+* **Test Goal**: Verify Preset Selection UI (Standard, Custom, Compounding), dynamic settings inputs locking, and automatic onboarding boot redirection flow.
+* **Environment**: Android Emulator (`Pixel_6_API_34`), Expo SDK 54.
+
+### ❌ Initial Run (Failed)
+* **Error**: Accessibility status check was stuck on "Awaiting Permission" in Onboarding Step 3 even after user granted it in the emulator settings.
+* **Investigation**: The native check `isAccessibilityEnabled` in `ExpoScreenTimeModule.kt` was hardcoded to check for shorthand `"com.clancy.appace/.AppWatcherService"`, whereas the Android OS registered the service with the fully qualified name `"com.clancy.appace/com.clancy.appace.AppWatcherService"`.
+* **Action taken**: Modified `isAccessibilityEnabled` in `ExpoScreenTimeModule.kt` to check for both the fully qualified and shorthand naming formats.
+
+###  Retry Run (Passed)
+* **Command**: `adb shell pm clear com.clancy.appace` and `./run-and-log.ps1`
+* **Result**: App compiled and booted successfully.
+  * Correctly redirected to **Onboarding Step 1** on fresh data boot.
+  * Step 2 displays standard/compounding/custom preset buttons and locked/unlocked configuration input fields as designed.
+  * Hides the "Continue" button for the compounding preset since it is not fully implemented.
+  * Step 3 automatically advances to Step 4 once accessibility permission is turned ON.
+  * Completing the onboarding lands on the Home Screen. Subsequent app launches boot straight to the Home Screen.

@@ -18,7 +18,9 @@ class BalanceRepository(context: Context) {
                     hourlyAccrualSeconds = 300,    // 5 mins
                     lastAccrualHour = -1,
                     lastResetDate = "",
-                    windowOpenGrantedToday = false
+                    windowOpenGrantedToday = false,
+                    budgetType = "custom",
+                    accrualIntervalHours = 1
                 )
             )
         }
@@ -52,6 +54,14 @@ class BalanceRepository(context: Context) {
 
     fun setHourlyAccrual(minutes: Int) {
         dao.upsert(getBalance().copy(hourlyAccrualSeconds = minutes * 60L))
+    }
+
+    fun setBudgetType(type: String) {
+        dao.upsert(getBalance().copy(budgetType = type))
+    }
+
+    fun setAccrualInterval(hours: Int) {
+        dao.upsert(getBalance().copy(accrualIntervalHours = hours))
     }
 
     // Core daily logic — called by WorkManager every 15 mins. Idempotent by design.
@@ -88,12 +98,46 @@ class BalanceRepository(context: Context) {
 
         // 4. HOURLY ACCRUAL — grant silently if we've moved into a new hour since last accrual
         // No notification fired here — silent drop by design
-        if (currentHour > current.lastAccrualHour && currentHour < current.windowEndHour) {
-            current = current.copy(
-                balanceSeconds = current.balanceSeconds + current.hourlyAccrualSeconds,
-                lastAccrualHour = currentHour
-            )
-            dao.upsert(current)
+        if (currentHour > current.lastAccrualHour) {
+            var updatedBalance = current.balanceSeconds
+            for (hr in (current.lastAccrualHour + 1)..currentHour) {
+                if (hr < current.windowEndHour) {
+                    val hoursSinceStart = hr - current.windowStartHour
+                    if (hoursSinceStart >= 0 && hoursSinceStart % current.accrualIntervalHours == 0) {
+                        updatedBalance += current.hourlyAccrualSeconds
+                    }
+                }
+            }
+            val targetLastAccrual = minOf(currentHour, current.windowEndHour - 1)
+            if (targetLastAccrual > current.lastAccrualHour) {
+                current = current.copy(
+                    balanceSeconds = updatedBalance,
+                    lastAccrualHour = targetLastAccrual
+                )
+                dao.upsert(current)
+            }
         }
+
+        /*
+         * TODO: Future compounding budget logic implementation.
+         * For compounding budget type:
+         * 1. In BalanceEntity, we would add:
+         *    - `lastAppUsageTimestamp: Long` (tracks the last time the user actively used a blocked/tracked app)
+         *    - `consecutiveHoursNoUse: Int` (tracks how many consecutive accrual windows have elapsed without app usage)
+         * 2. In tick():
+         *    - During the missed-hour catch-up loop (for hr in lastAccrualHour + 1..currentHour):
+         *      * Check if user used a tracked app during the hour (e.g. by querying an app usage log or checking lastAppUsageTimestamp).
+         *      * If they used the app:
+         *        - consecutiveHoursNoUse = 0
+         *        - Grant standard hourly accrual: updatedBalance += hourlyAccrualSeconds
+         *      * If they did NOT use the app:
+         *        - consecutiveHoursNoUse++
+         *        - If consecutiveHoursNoUse >= 2:
+         *          - Grant compounding bonus: updatedBalance += compoundingBonusSeconds (e.g., 12 mins instead of 10 mins total)
+         *        - Else:
+         *          - Grant standard hourly accrual: updatedBalance += hourlyAccrualSeconds
+         * 3. Upon any tracked app usage event (detected by AppWatcherService):
+         *    - We would call a method to reset consecutiveHoursNoUse to 0.
+         */
     }
 }

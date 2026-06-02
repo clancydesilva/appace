@@ -7,12 +7,17 @@ interface TimerStore {
   windowEndHour: number;
   openingBalanceMinutes: number;
   hourlyAccrualMinutes: number;
+  budgetType: string;
+  accrualIntervalHours: number;
   trackedApps: string[];
   installedApps: InstalledApp[];
   isWithinWindow: boolean;
   accessibilityEnabled: boolean;
   batteryOptimizationIgnored: boolean;
+  onboardingCompleted: boolean;
 
+  checkOnboarding: () => Promise<boolean>;
+  setOnboardingCompleted: (completed: boolean) => Promise<void>;
   fetchBalance: () => Promise<void>;
   fetchSettings: () => Promise<void>;
   fetchTrackedApps: () => Promise<void>;
@@ -23,12 +28,14 @@ interface TimerStore {
   setWindowHours: (start: number, end: number) => Promise<void>;
   setOpeningBalance: (mins: number) => Promise<void>;
   setHourlyAccrual: (mins: number) => Promise<void>;
+  setBudgetType: (type: string) => Promise<void>;
+  setAccrualInterval: (hours: number) => Promise<void>;
   setTrackedApps: (pkgs: string[]) => Promise<void>;
   openAccessibilitySettings: () => Promise<void>;
   openBatteryOptimizationSettings: () => Promise<void>;
   startService: () => Promise<void>;
 
-  maxDailyMinutes: () => number;  // opening + ((hours-1) x accrual)
+  maxDailyMinutes: () => number;
   minutesUntilNextDrop: () => number;
 }
 
@@ -38,11 +45,24 @@ export const useTimerStore = create<TimerStore>((set, get) => ({
   windowEndHour: 24,
   openingBalanceMinutes: 5,
   hourlyAccrualMinutes: 5,
+  budgetType: 'custom',
+  accrualIntervalHours: 1,
   trackedApps: [],
   installedApps: [],
   isWithinWindow: false,
   accessibilityEnabled: false,
   batteryOptimizationIgnored: false,
+  onboardingCompleted: false,
+
+  checkOnboarding: async () => {
+    const completed = await ScreenTime.isOnboardingCompleted();
+    set({ onboardingCompleted: completed });
+    return completed;
+  },
+  setOnboardingCompleted: async (completed) => {
+    await ScreenTime.setOnboardingCompleted(completed);
+    set({ onboardingCompleted: completed });
+  },
 
   fetchBalance: async () => set({ balanceSeconds: await ScreenTime.getBalance() }),
 
@@ -53,6 +73,8 @@ export const useTimerStore = create<TimerStore>((set, get) => ({
       windowEndHour: s.windowEndHour,
       openingBalanceMinutes: s.openingBalanceMinutes,
       hourlyAccrualMinutes: s.hourlyAccrualMinutes,
+      budgetType: s.budgetType || 'custom',
+      accrualIntervalHours: s.accrualIntervalHours || 1,
     });
   },
 
@@ -74,6 +96,14 @@ export const useTimerStore = create<TimerStore>((set, get) => ({
     await ScreenTime.setHourlyAccrual(mins);
     set({ hourlyAccrualMinutes: mins });
   },
+  setBudgetType: async (type) => {
+    await ScreenTime.setBudgetType(type);
+    set({ budgetType: type });
+  },
+  setAccrualInterval: async (hours) => {
+    await ScreenTime.setAccrualInterval(hours);
+    set({ accrualIntervalHours: hours });
+  },
   setTrackedApps: async (pkgs) => {
     await ScreenTime.setTrackedApps(pkgs);
     set({ trackedApps: pkgs });
@@ -83,10 +113,31 @@ export const useTimerStore = create<TimerStore>((set, get) => ({
   startService: async () => ScreenTime.startForegroundService(),
 
   maxDailyMinutes: () => {
-    const { windowStartHour, windowEndHour, openingBalanceMinutes, hourlyAccrualMinutes } = get();
-    const hours = windowEndHour - windowStartHour;
-    return openingBalanceMinutes + ((hours - 1) * hourlyAccrualMinutes); // 5 + (17x5) = 90
+    const { windowStartHour, windowEndHour, openingBalanceMinutes, hourlyAccrualMinutes, accrualIntervalHours } = get();
+    let drops = 0;
+    for (let hr = windowStartHour + 1; hr < windowEndHour; hr++) {
+      if ((hr - windowStartHour) % accrualIntervalHours === 0) {
+        drops++;
+      }
+    }
+    return openingBalanceMinutes + (drops * hourlyAccrualMinutes);
   },
 
-  minutesUntilNextDrop: () => 60 - new Date().getMinutes(),
+  minutesUntilNextDrop: () => {
+    const { windowStartHour, accrualIntervalHours } = get();
+    const now = new Date();
+    const currentHour = now.getHours();
+    
+    // Find hours since start to figure out when the next interval boundary is
+    const hoursSinceStart = currentHour - windowStartHour;
+    if (hoursSinceStart < 0) {
+      // If we are before windowStartHour, the next drop is at windowStartHour
+      // which is opening balance.
+      return 0; // Handled by standard screen logic
+    }
+    
+    const remainingHoursInInterval = accrualIntervalHours - (hoursSinceStart % accrualIntervalHours);
+    const minsToNextHour = 60 - now.getMinutes();
+    return ((remainingHoursInInterval - 1) * 60) + minsToNextHour;
+  },
 }));

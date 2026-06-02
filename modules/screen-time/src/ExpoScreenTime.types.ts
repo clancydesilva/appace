@@ -3,6 +3,8 @@ export interface AppaceSettings {
   windowEndHour: number;
   openingBalanceMinutes: number;
   hourlyAccrualMinutes: number;
+  budgetType: string;
+  accrualIntervalHours: number;
 }
 
 export interface InstalledApp {
