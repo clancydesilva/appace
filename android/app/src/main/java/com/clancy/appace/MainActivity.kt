@@ -2,6 +2,8 @@ package com.clancy.appace
 
 import android.os.Build
 import android.os.Bundle
+import android.content.Intent
+import android.net.Uri
 
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate
@@ -11,12 +13,28 @@ import com.facebook.react.defaults.DefaultReactActivityDelegate
 import expo.modules.ReactActivityDelegateWrapper
 
 class MainActivity : ReactActivity() {
+  private fun handleRouteIntent(intent: Intent?) {
+    if (intent != null && intent.hasExtra("route")) {
+      val route = intent.getStringExtra("route")
+      if (route != null) {
+        intent.data = Uri.parse("appace://$route")
+      }
+    }
+  }
+
   override fun onCreate(savedInstanceState: Bundle?) {
     // Set the theme to AppTheme BEFORE onCreate to support
     // coloring the background, status bar, and navigation bar.
     // This is required for expo-splash-screen.
     setTheme(R.style.AppTheme);
+    handleRouteIntent(intent)
     super.onCreate(null)
+  }
+
+  override fun onNewIntent(intent: Intent) {
+    handleRouteIntent(intent)
+    setIntent(intent)
+    super.onNewIntent(intent)
   }
 
   /**

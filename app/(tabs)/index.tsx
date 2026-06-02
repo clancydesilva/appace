@@ -1,305 +1,263 @@
-import { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Button } from 'react-native';
+import React, { useEffect, useState, useRef } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  SafeAreaView,
+  Platform,
+  AppState,
+  AppStateStatus,
+} from 'react-native';
+import { useRouter } from 'expo-router';
 import { useTimerStore } from '../../store/useTimerStore';
 
-interface TestResult {
-  name: string;
-  status: 'RUNNING' | 'PASS' | 'FAIL';
-  details: string;
-}
-
 export default function HomeScreen() {
-  const [results, setResults] = useState<TestResult[]>([]);
-  
-  // Bind store state values for visual display
-  const balanceSeconds = useTimerStore(state => state.balanceSeconds);
-  const windowStartHour = useTimerStore(state => state.windowStartHour);
-  const windowEndHour = useTimerStore(state => state.windowEndHour);
-  const openingBalanceMinutes = useTimerStore(state => state.openingBalanceMinutes);
-  const hourlyAccrualMinutes = useTimerStore(state => state.hourlyAccrualMinutes);
-  const accessibilityEnabled = useTimerStore(state => state.accessibilityEnabled);
+  const router = useRouter();
+  const store = useTimerStore();
 
+  const [minutesUntilNextDrop, setMinutesUntilNextDrop] = useState(60 - new Date().getMinutes());
+  const [hourProgress, setHourProgress] = useState(new Date().getMinutes() / 60);
+
+  const balanceTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const clockTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Core initialization & listeners
   useEffect(() => {
-    runStoreTests();
+    // 1. Initial fetches
+    refreshState();
+
+    // 2. Setup 30-second refetch interval for database sync
+    balanceTimer.current = setInterval(() => {
+      store.fetchBalance();
+      store.checkWindow();
+      store.checkAccessibility();
+      store.checkBatteryOptimization();
+    }, 30000);
+
+    // 3. Setup 1-second clock timer to update progress bar and countdowns
+    clockTimer.current = setInterval(() => {
+      const now = new Date();
+      setMinutesUntilNextDrop(60 - now.getMinutes());
+      setHourProgress(now.getMinutes() / 60);
+    }, 1000);
+
+    // 4. AppState listener for active foreground detection (checks permissions immediately when user returns)
+    const handleAppStateChange = (nextStatus: AppStateStatus) => {
+      if (nextStatus === 'active') {
+        refreshState();
+      }
+    };
+    const sub = AppState.addEventListener('change', handleAppStateChange);
+
+    return () => {
+      if (balanceTimer.current) clearInterval(balanceTimer.current);
+      if (clockTimer.current) clearInterval(clockTimer.current);
+      sub.remove();
+    };
   }, []);
 
-  async function runStoreTests() {
-    const runResults: TestResult[] = [];
-    const updateResult = (name: string, status: 'PASS' | 'FAIL', details: string) => {
-      runResults.push({ name, status, details });
-      setResults([...runResults]);
-      console.log(`[${status}] Zustand Store: ${name} - ${details}`);
-    };
+  const refreshState = async () => {
+    await store.startService();
+    await store.fetchBalance();
+    await store.fetchSettings();
+    await store.checkWindow();
+    await store.checkAccessibility();
+    await store.checkBatteryOptimization();
+  };
 
-    console.log('\n=============================================');
-    console.log('   STARTING ZUSTAND STORE AUTOMATED TESTS    ');
-    console.log('=============================================\n');
+  // Helper formatting for 12-hour labels
+  const formatHourLabel = (h: number) => {
+    if (h === 0 || h === 24) return '12:00am';
+    if (h === 12) return '12:00pm';
+    return h > 12 ? `${h - 12}:00pm` : `${h}:00am`;
+  };
 
-    const store = useTimerStore.getState();
+  // Format balance (seconds) to MM:SS (e.g. 75m 30s -> 75:30)
+  const formatBalance = (totalSeconds: number) => {
+    const mins = Math.floor(totalSeconds / 60);
+    const secs = totalSeconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
 
-    // TEST 1: Fetch settings from store
-    try {
-      await store.fetchSettings();
-      // Read current values directly from store state
-      const current = useTimerStore.getState();
-      updateResult(
-        'Store Fetch Settings',
-        'PASS',
-        `Window: ${current.windowStartHour}-${current.windowEndHour}, Opening: ${current.openingBalanceMinutes}m, Accrual: ${current.hourlyAccrualMinutes}m`
-      );
-    } catch (e: any) {
-      updateResult('Store Fetch Settings', 'FAIL', e.message || 'Unknown error');
+  // Check window status text
+  const getWindowStatusText = () => {
+    if (store.isWithinWindow) {
+      return 'Active Earning Window';
     }
+    return `Window opens at ${formatHourLabel(store.windowStartHour)}`;
+  };
 
-    // TEST 2: Fetch balance from store
-    try {
-      await store.fetchBalance();
-      const currentBalance = useTimerStore.getState().balanceSeconds;
-      updateResult('Store Fetch Balance', 'PASS', `Balance: ${currentBalance} seconds`);
-    } catch (e: any) {
-      updateResult('Store Fetch Balance', 'FAIL', e.message || 'Unknown error');
-    }
-
-    // TEST 3: Update Settings via Store Actions
-    try {
-      // Execute store update actions
-      await store.setWindowHours(8, 22);
-      await store.setOpeningBalance(15);
-      await store.setHourlyAccrual(10);
-
-      // Read current store state
-      const current = useTimerStore.getState();
-      if (
-        current.windowStartHour === 8 &&
-        current.windowEndHour === 22 &&
-        current.openingBalanceMinutes === 15 &&
-        current.hourlyAccrualMinutes === 10
-      ) {
-        updateResult('Store Actions (Set Settings)', 'PASS', 'Window set to 8-22, Opening 15m, Accrual 10m verified in store state');
-      } else {
-        updateResult(
-          'Store Actions (Set Settings)',
-          'FAIL',
-          `Values mismatch in store state: ${JSON.stringify(current)}`
-        );
-      }
-    } catch (e: any) {
-      updateResult('Store Actions (Set Settings)', 'FAIL', e.message || 'Unknown error');
-    }
-
-    // TEST 4: Fetch Installed Apps via Store Action
-    try {
-      await store.fetchInstalledApps();
-      const apps = useTimerStore.getState().installedApps;
-      updateResult(
-        'Store Fetch Installed Apps',
-        'PASS',
-        `Loaded ${apps.length} apps. First 3: ${apps.slice(0, 3).map(a => a.name).join(', ')}`
-      );
-    } catch (e: any) {
-      updateResult('Store Fetch Installed Apps', 'FAIL', e.message || 'Unknown error');
-    }
-
-    // TEST 5: Tracked Apps Write & Read via Store
-    try {
-      const testPackages = ['com.android.chrome', 'com.google.android.youtube'];
-      await store.setTrackedApps(testPackages);
-      const retrieved = useTimerStore.getState().trackedApps;
-      const match = testPackages.every(p => retrieved.includes(p));
-      if (match) {
-        updateResult('Store Save/Load Tracked Apps', 'PASS', `Tracked packages: ${retrieved.join(', ')}`);
-      } else {
-        updateResult('Store Save/Load Tracked Apps', 'FAIL', `Expected ${testPackages.join(', ')}, got ${retrieved.join(', ')}`);
-      }
-    } catch (e: any) {
-      updateResult('Store Save/Load Tracked Apps', 'FAIL', e.message || 'Unknown error');
-    }
-
-    // TEST 6: Check Accessibility Status via Store Action
-    try {
-      await store.checkAccessibility();
-      const isEnabled = useTimerStore.getState().accessibilityEnabled;
-      updateResult('Store Check Accessibility', 'PASS', `Accessibility permission active: ${isEnabled}`);
-    } catch (e: any) {
-      updateResult('Store Check Accessibility', 'FAIL', e.message || 'Unknown error');
-    }
-
-    // TEST 7: Computed Helper maxDailyMinutes
-    try {
-      const maxMins = store.maxDailyMinutes();
-      // For window 8-22, hours = 14
-      // Formula: 15 + (13 * 10) = 145 mins
-      if (maxMins === 145) {
-        updateResult('Store Computed (maxDailyMinutes)', 'PASS', `Correctly calculated maximum daily balance: ${maxMins} mins`);
-      } else {
-        updateResult('Store Computed (maxDailyMinutes)', 'FAIL', `Calculated incorrect max minutes: ${maxMins} (expected 145)`);
-      }
-    } catch (e: any) {
-      updateResult('Store Computed (maxDailyMinutes)', 'FAIL', e.message || 'Unknown error');
-    }
-
-    // TEST 8: Computed Helper minutesUntilNextDrop
-    try {
-      const remainingMins = store.minutesUntilNextDrop();
-      if (remainingMins >= 0 && remainingMins <= 60) {
-        updateResult('Store Computed (minutesUntilNextDrop)', 'PASS', `Minutes until next drop: ${remainingMins} mins`);
-      } else {
-        updateResult('Store Computed (minutesUntilNextDrop)', 'FAIL', `Returned invalid range: ${remainingMins}`);
-      }
-    } catch (e: any) {
-      updateResult('Store Computed (minutesUntilNextDrop)', 'FAIL', e.message || 'Unknown error');
-    }
-
-    console.log('\n=============================================');
-    console.log('         ZUSTAND STORE TESTS COMPLETED        ');
-    console.log('=============================================\n');
-  }
+  const computedMaxDaily = store.maxDailyMinutes();
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>Appace Store Diagnostics</Text>
-
-      {/* Reactive Store Values Panel */}
-      <View style={styles.statusPanel}>
-        <Text style={styles.panelTitle}>Reactive React State</Text>
-        <Text style={styles.panelText}>Balance (Seconds): <Text style={styles.panelValue}>{balanceSeconds}</Text></Text>
-        <Text style={styles.panelText}>Window Hours: <Text style={styles.panelValue}>{windowStartHour} - {windowEndHour}</Text></Text>
-        <Text style={styles.panelText}>Opening Balance: <Text style={styles.panelValue}>{openingBalanceMinutes}m</Text></Text>
-        <Text style={styles.panelText}>Hourly Accrual: <Text style={styles.panelValue}>{hourlyAccrualMinutes}m</Text></Text>
-        <Text style={styles.panelText}>Accessibility: <Text style={[styles.panelValue, accessibilityEnabled ? styles.activeText : styles.inactiveText]}>{accessibilityEnabled ? 'ENABLED' : 'DISABLED'}</Text></Text>
-      </View>
-      
-      <View style={styles.testSection}>
-        {results.map((res, index) => (
-          <View key={index} style={styles.testRow}>
-            <Text style={[styles.statusTag, res.status === 'PASS' ? styles.passTag : styles.failTag]}>
-              {res.status}
+    <SafeAreaView style={styles.safeArea}>
+      <View style={styles.container}>
+        {/* Subtle Permission Warning Banners */}
+        {!store.accessibilityEnabled && (
+          <TouchableOpacity
+            style={styles.warningBanner}
+            onPress={() => store.openAccessibilitySettings()}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.warningTitle}>Accessibility Service Inactive</Text>
+            <Text style={styles.warningDesc}>
+              Appace cannot monitor screen usage. Tap here to enable.
             </Text>
-            <View style={styles.testInfo}>
-              <Text style={styles.testName}>{res.name}</Text>
-              <Text style={styles.testDetails}>{res.details}</Text>
-            </View>
-          </View>
-        ))}
-      </View>
+          </TouchableOpacity>
+        )}
 
-      <View style={styles.buttonContainer}>
-        <Button 
-          title="Re-run Store Tests" 
-          color="#333333"
-          onPress={runStoreTests} 
-        />
-        <View style={styles.spacer} />
-        <Button 
-          title="Open Accessibility Settings" 
-          color="#E67E22"
-          onPress={() => useTimerStore.getState().openAccessibilitySettings()} 
-        />
-        <View style={styles.spacer} />
-        <Button 
-          title="Start Foreground Service" 
-          color="#2ECC71"
-          onPress={() => useTimerStore.getState().startService()} 
-        />
+        {store.accessibilityEnabled && !store.batteryOptimizationIgnored && (
+          <TouchableOpacity
+            style={[styles.warningBanner, styles.warningBannerSubtle]}
+            onPress={() => store.openBatteryOptimizationSettings()}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.warningTitle}>Battery Optimization Active</Text>
+            <Text style={styles.warningDesc}>
+              Accruals may be delayed. Tap to allow unrestricted background execution.
+            </Text>
+          </TouchableOpacity>
+        )}
+
+        {/* Large Timer Display */}
+        <View style={styles.timerSection}>
+          <Text style={styles.windowStatus}>{getWindowStatusText()}</Text>
+          <Text style={styles.timerDigits}>{formatBalance(store.balanceSeconds)}</Text>
+          <Text style={styles.timerLabel}>REMAINING BALANCE</Text>
+        </View>
+
+        {/* Hour Accrual Progress Section */}
+        {store.isWithinWindow && (
+          <View style={styles.accrualSection}>
+            <View style={styles.progressBarBg}>
+              <View style={[styles.progressBarFill, { width: `${hourProgress * 100}%` }]} />
+            </View>
+            <Text style={styles.accrualText}>
+              Next <Text style={styles.boldText}>{store.hourlyAccrualMinutes} mins</Text> in{' '}
+              <Text style={styles.boldText}>{minutesUntilNextDrop} minutes</Text>
+            </Text>
+          </View>
+        )}
+
+        {/* Footer Summary Stats */}
+        <View style={styles.summaryContainer}>
+          <Text style={styles.summaryText}>
+            Earning {store.hourlyAccrualMinutes} mins/hr · Resets at midnight
+          </Text>
+          <Text style={styles.summarySubtext}>
+            Daily Max Potential: {computedMaxDaily} mins
+          </Text>
+        </View>
       </View>
-    </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    padding: 24,
+  safeArea: {
+    flex: 1,
     backgroundColor: '#0D0D0D',
-    minHeight: '100%',
   },
-  title: {
-    color: '#FFFFFF',
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 10,
-    marginTop: 40,
-    textAlign: 'center',
+  container: {
+    flex: 1,
+    paddingHorizontal: 24,
+    justifyContent: 'space-between',
+    paddingTop: Platform.OS === 'android' ? 20 : 10,
+    paddingBottom: 40,
   },
-  statusPanel: {
-    backgroundColor: '#111111',
+  warningBanner: {
+    backgroundColor: '#1C0D0D',
     borderWidth: 1,
-    borderColor: '#333333',
+    borderColor: '#E74C3C',
+    borderRadius: 8,
     padding: 16,
-    borderRadius: 8,
-    marginBottom: 20,
+    marginTop: 10,
   },
-  panelTitle: {
+  warningBannerSubtle: {
+    backgroundColor: '#1C160D',
+    borderColor: '#E67E22',
+  },
+  warningTitle: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: 'bold',
+  },
+  warningDesc: {
     color: '#888888',
-    fontSize: 12,
-    textTransform: 'uppercase',
-    fontWeight: 'bold',
-    marginBottom: 8,
-    letterSpacing: 1,
+    fontSize: 11,
+    marginTop: 4,
+    lineHeight: 15,
   },
-  panelText: {
-    color: '#CCCCCC',
-    fontSize: 14,
-    marginBottom: 4,
-  },
-  panelValue: {
-    color: '#FFFFFF',
-    fontWeight: 'bold',
-  },
-  activeText: {
-    color: '#2ECC71',
-  },
-  inactiveText: {
-    color: '#E74C3C',
-  },
-  testSection: {
-    marginBottom: 30,
-  },
-  testRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: '#161616',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#222222',
-  },
-  statusTag: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-    fontSize: 10,
-    fontWeight: 'bold',
-    marginRight: 12,
-    textAlign: 'center',
-    minWidth: 50,
-  },
-  passTag: {
-    backgroundColor: '#2ECC71',
-    color: '#000000',
-  },
-  failTag: {
-    backgroundColor: '#E74C3C',
-    color: '#FFFFFF',
-  },
-  testInfo: {
+  timerSection: {
+    alignItems: 'center',
+    justifyContent: 'center',
     flex: 1,
   },
-  testName: {
-    color: '#FFFFFF',
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  testDetails: {
-    color: '#888888',
+  windowStatus: {
+    color: '#555555',
     fontSize: 12,
-    marginTop: 4,
+    fontWeight: '900',
+    letterSpacing: 2,
+    textTransform: 'uppercase',
+    marginBottom: 20,
   },
-  buttonContainer: {
-    marginTop: 10,
+  timerDigits: {
+    color: '#FFFFFF',
+    fontSize: 84,
+    fontWeight: '100',
+    letterSpacing: -2,
+    fontVariant: ['tabular-nums'],
+  },
+  timerLabel: {
+    color: '#555555',
+    fontSize: 10,
+    fontWeight: 'bold',
+    letterSpacing: 1.5,
+    marginTop: 16,
+  },
+  accrualSection: {
+    width: '100%',
+    alignItems: 'center',
     marginBottom: 40,
   },
-  spacer: {
-    height: 12,
+  progressBarBg: {
+    width: '100%',
+    height: 2,
+    backgroundColor: '#1A1A1A',
+    borderRadius: 1,
+    overflow: 'hidden',
+    marginBottom: 16,
+  },
+  progressBarFill: {
+    height: '100%',
+    backgroundColor: '#FFFFFF',
+  },
+  accrualText: {
+    color: '#555555',
+    fontSize: 12,
+  },
+  boldText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  summaryContainer: {
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderColor: '#141414',
+    paddingTop: 24,
+  },
+  summaryText: {
+    color: '#555555',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  summarySubtext: {
+    color: '#333333',
+    fontSize: 10,
+    fontWeight: 'bold',
+    marginTop: 6,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
 });

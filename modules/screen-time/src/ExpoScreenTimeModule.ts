@@ -13,6 +13,8 @@ declare class ExpoScreenTimeModule extends NativeModule {
   getInstalledApps(): Promise<InstalledApp[]>;
   isAccessibilityEnabled(): Promise<boolean>;
   openAccessibilitySettings(): Promise<void>;
+  isBatteryOptimizationIgnored(): Promise<boolean>;
+  openBatteryOptimizationSettings(): Promise<void>;
   startForegroundService(): Promise<void>;
 }
 

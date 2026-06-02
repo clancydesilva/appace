@@ -63,6 +63,7 @@ class ExpoScreenTimeModule : Module() {
             scope.launch {
                 try {
                     repo.setWindowHours(start, end)
+                    repo.tick()
                     promise.resolve(null)
                 } catch (e: Exception) {
                     promise.reject("ERR_DB", e.message, e)
@@ -74,6 +75,7 @@ class ExpoScreenTimeModule : Module() {
             scope.launch {
                 try {
                     repo.setOpeningBalance(minutes)
+                    repo.tick()
                     promise.resolve(null)
                 } catch (e: Exception) {
                     promise.reject("ERR_DB", e.message, e)
@@ -85,6 +87,7 @@ class ExpoScreenTimeModule : Module() {
             scope.launch {
                 try {
                     repo.setHourlyAccrual(minutes)
+                    repo.tick()
                     promise.resolve(null)
                 } catch (e: Exception) {
                     promise.reject("ERR_DB", e.message, e)
@@ -129,8 +132,21 @@ class ExpoScreenTimeModule : Module() {
             context.startActivity(intent)
         }
 
+        AsyncFunction("isBatteryOptimizationIgnored") { ->
+            val pm = context.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+            pm.isIgnoringBatteryOptimizations(context.packageName)
+        }
+
+        AsyncFunction("openBatteryOptimizationSettings") { ->
+            val intent = Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            context.startActivity(intent)
+        }
+
         AsyncFunction("startForegroundService") { ->
             context.startForegroundService(Intent(context, ForegroundService::class.java))
+            Unit
         }
     }
 }

@@ -42,7 +42,10 @@ Every test run and debug cycle must be tracked to maintain a clean history of is
 - `phase1/...` — Expo scaffold and navigation
 - `phase2/...` — Android permissions and manifest
 - `phase3/...` — Kotlin native module (sub-branches per component: room-db, workmanager, accessibility-service, rn-bridge)
-- `phase4/...` — React Native screens
+- `phase4/...` — Zustand store integration
+- `phase5/...` — React Native screens (UI implementation)
+- `phase6/...` — Edge case hardening
+- `phase7/...` — Testing & Physical device verification
 - Merge to main only when a full phase is complete and tested.
 
 ## Testing
