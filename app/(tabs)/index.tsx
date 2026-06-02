@@ -58,6 +58,11 @@ export default function HomeScreen() {
   }, []);
 
   const refreshState = async () => {
+    const completed = await store.checkOnboarding();
+    if (!completed) {
+      router.replace('/onboarding');
+      return;
+    }
     await store.startService();
     await store.fetchBalance();
     await store.fetchSettings();

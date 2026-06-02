@@ -20,6 +20,7 @@ export default function SettingsScreen() {
   const [endHourStr, setEndHourStr] = useState('');
   const [openingMinsStr, setOpeningMinsStr] = useState('');
   const [accrualMinsStr, setAccrualMinsStr] = useState('');
+  const [accrualIntervalStr, setAccrualIntervalStr] = useState('');
 
   const statusTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -31,6 +32,7 @@ export default function SettingsScreen() {
       setEndHourStr(String(state.windowEndHour));
       setOpeningMinsStr(String(state.openingBalanceMinutes));
       setAccrualMinsStr(String(state.hourlyAccrualMinutes));
+      setAccrualIntervalStr(String(state.accrualIntervalHours));
     });
 
     // Check permissions immediately
@@ -81,6 +83,46 @@ export default function SettingsScreen() {
     }
   };
 
+  const handleSelectStandard = async () => {
+    await store.setBudgetType('standard');
+    await store.setWindowHours(6, 22);
+    await store.setOpeningBalance(5);
+    await store.setHourlyAccrual(5);
+    await store.setAccrualInterval(1);
+    setStartHourStr('6');
+    setEndHourStr('22');
+    setOpeningMinsStr('5');
+    setAccrualMinsStr('5');
+    setAccrualIntervalStr('1');
+  };
+
+  const handleSelectCompounding = async () => {
+    await store.setBudgetType('compounding');
+  };
+
+  const handleSelectCustom = async () => {
+    await store.setBudgetType('custom');
+  };
+
+  const handleUpdateAccrualInterval = async (text: string) => {
+    setAccrualIntervalStr(text);
+    const parsed = parseInt(text);
+    if (!isNaN(parsed) && parsed >= 1 && parsed <= 24) {
+      await store.setAccrualInterval(parsed);
+    }
+  };
+
+  /*
+   * TODO: Compounding Budget Preset UI implementation.
+   * When compounding is enabled:
+   * 1. Add "Compounding" active state to allow selecting this preset.
+   * 2. When selected, show compounding specific parameters:
+   *    - Custom consecutive hours threshold (default: 2 hours)
+   *    - Standard accrual minutes (default: 5 mins)
+   *    - Compounding bonus accrual minutes (default: 12 mins instead of 10 mins for 2 hours)
+   * 3. Provide inputs for these parameters in the UI, and bind them to store settings.
+   */
+
   // Helper formatting for 12-hour labels
   const formatHourLabel = (h: number) => {
     if (h === 0 || h === 24) return '12:00am (Midnight)';
@@ -107,18 +149,112 @@ export default function SettingsScreen() {
             <Text style={styles.subtitle}>Configure daily rules and system permissions.</Text>
           </View>
 
-          {/* Configuration Inputs */}
+          {/* Budget Preset Section */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Daily Window Rules</Text>
+            <Text style={styles.sectionTitle}>Budget Preset</Text>
+            <View style={styles.presetContainer}>
+              <TouchableOpacity
+                style={[
+                  styles.presetTab,
+                  store.budgetType === 'standard' && styles.presetTabActive,
+                ]}
+                onPress={handleSelectStandard}
+              >
+                <Text
+                  style={[
+                    styles.presetTabText,
+                    store.budgetType === 'standard' && styles.presetTabTextActive,
+                  ]}
+                >
+                  Standard
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.presetTab,
+                  store.budgetType === 'compounding' && styles.presetTabActive,
+                ]}
+                onPress={handleSelectCompounding}
+              >
+                <Text
+                  style={[
+                    styles.presetTabText,
+                    store.budgetType === 'compounding' && styles.presetTabTextActive,
+                  ]}
+                >
+                  Compounding
+                </Text>
+                <View style={styles.soonBadge}>
+                  <Text style={styles.soonBadgeText}>Soon</Text>
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.presetTab,
+                  store.budgetType === 'custom' && styles.presetTabActive,
+                ]}
+                onPress={handleSelectCustom}
+              >
+                <Text
+                  style={[
+                    styles.presetTabText,
+                    store.budgetType === 'custom' && styles.presetTabTextActive,
+                  ]}
+                >
+                  Custom
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {store.budgetType === 'standard' && (
+              <View style={styles.presetDescPanel}>
+                <Text style={styles.presetDescTitle}>Standard Mode Locked Details</Text>
+                <Text style={styles.presetDescText}>
+                  • Active daily window: 6:00am to 10:00pm.{"\n"}
+                  • Grants 5 minutes opening balance at 6:00am.{"\n"}
+                  • Grants 5 minutes accrual balance every 1 hour.{"\n"}
+                  • Max daily budget: 90 minutes.
+                </Text>
+              </View>
+            )}
+
+            {store.budgetType === 'compounding' && (
+              <View style={[styles.presetDescPanel, { borderColor: '#1F1212', backgroundColor: '#0F0909' }]}>
+                <Text style={[styles.presetDescTitle, { color: '#E74C3C' }]}>
+                  Compounding Budget (Coming Soon)
+                </Text>
+                <Text style={[styles.presetDescText, { color: '#BB8888' }]}>
+                  Encourage delayed gratification! For every hour you go without using a tracked app, the more you get when you do. Stay locked in for longer!
+                </Text>
+              </View>
+            )}
+
+            {store.budgetType === 'custom' && (
+              <View style={styles.presetDescPanel}>
+                <Text style={styles.presetDescTitle}>Custom Mode Enabled</Text>
+                <Text style={styles.presetDescText}>
+                  All parameters unlocked. You can configure active hours, opening balances, hourly accruals, and how frequently drops occur.
+                </Text>
+              </View>
+            )}
+          </View>
+
+          {/* Configuration Inputs */}
+          {store.budgetType === 'custom' && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Daily Window Rules</Text>
 
             <View style={styles.inputRow}>
               <View style={styles.inputContainer}>
                 <Text style={styles.inputLabel}>Window Start (Hour)</Text>
                 <TextInput
-                  style={styles.textInput}
+                  style={[styles.textInput, store.budgetType !== 'custom' && styles.textInputDisabled]}
                   keyboardType="numeric"
                   value={startHourStr}
                   onChangeText={handleUpdateStartHour}
+                  editable={store.budgetType === 'custom'}
                   placeholder="6"
                   placeholderTextColor="#444"
                 />
@@ -130,10 +266,11 @@ export default function SettingsScreen() {
               <View style={styles.inputContainer}>
                 <Text style={styles.inputLabel}>Window End (Hour)</Text>
                 <TextInput
-                  style={styles.textInput}
+                  style={[styles.textInput, store.budgetType !== 'custom' && styles.textInputDisabled]}
                   keyboardType="numeric"
                   value={endHourStr}
                   onChangeText={handleUpdateEndHour}
+                  editable={store.budgetType === 'custom'}
                   placeholder="24"
                   placeholderTextColor="#444"
                 />
@@ -147,10 +284,11 @@ export default function SettingsScreen() {
               <View style={styles.inputContainer}>
                 <Text style={styles.inputLabel}>Opening Balance (Mins)</Text>
                 <TextInput
-                  style={styles.textInput}
+                  style={[styles.textInput, store.budgetType !== 'custom' && styles.textInputDisabled]}
                   keyboardType="numeric"
                   value={openingMinsStr}
                   onChangeText={handleUpdateOpening}
+                  editable={store.budgetType === 'custom'}
                   placeholder="5"
                   placeholderTextColor="#444"
                 />
@@ -159,15 +297,36 @@ export default function SettingsScreen() {
               <View style={styles.inputContainer}>
                 <Text style={styles.inputLabel}>Hourly Accrual (Mins)</Text>
                 <TextInput
-                  style={styles.textInput}
+                  style={[styles.textInput, store.budgetType !== 'custom' && styles.textInputDisabled]}
                   keyboardType="numeric"
                   value={accrualMinsStr}
                   onChangeText={handleUpdateAccrual}
+                  editable={store.budgetType === 'custom'}
                   placeholder="5"
                   placeholderTextColor="#444"
                 />
               </View>
             </View>
+
+            {store.budgetType === 'custom' && (
+              <View style={styles.inputRow}>
+                <View style={styles.inputContainer}>
+                  <Text style={styles.inputLabel}>Accrual Interval (Hours)</Text>
+                  <TextInput
+                    style={styles.textInput}
+                    keyboardType="numeric"
+                    value={accrualIntervalStr}
+                    onChangeText={handleUpdateAccrualInterval}
+                    placeholder="1"
+                    placeholderTextColor="#444"
+                  />
+                  <Text style={styles.inputSubtext}>
+                    Drops occur every {store.accrualIntervalHours} hour{store.accrualIntervalHours > 1 ? 's' : ''}
+                  </Text>
+                </View>
+                <View style={styles.inputContainer} />
+              </View>
+            )}
 
             {/* Plain English Summary */}
             <View style={styles.summaryPanel}>
@@ -175,14 +334,16 @@ export default function SettingsScreen() {
               <Text style={styles.summaryText}>
                 Start with <Text style={styles.highlightText}>{store.openingBalanceMinutes} mins</Text> at{' '}
                 <Text style={styles.highlightText}>{formatHourLabel(store.windowStartHour)}</Text>, earning{' '}
-                <Text style={styles.highlightText}>{store.hourlyAccrualMinutes} mins/hr</Text> until{' '}
-                <Text style={styles.highlightText}>{formatHourLabel(store.windowEndHour)}</Text>.
+                <Text style={styles.highlightText}>{store.hourlyAccrualMinutes} mins</Text>{' '}
+                {store.accrualIntervalHours === 1 ? 'each hour' : `every ${store.accrualIntervalHours} hours`}{' '}
+                until <Text style={styles.highlightText}>{formatHourLabel(store.windowEndHour)}</Text>.
               </Text>
               <Text style={styles.summaryMax}>
                 Max budget today: <Text style={styles.highlightText}>{computedMaxDaily} minutes</Text>
               </Text>
             </View>
           </View>
+          )}
 
           {/* System Permissions Checkers */}
           <View style={styles.section}>
@@ -320,6 +481,11 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 15,
   },
+  textInputDisabled: {
+    backgroundColor: '#0F0F0F',
+    borderColor: '#181818',
+    color: '#555555',
+  },
   inputSubtext: {
     color: '#444444',
     fontSize: 10,
@@ -416,5 +582,71 @@ const styles = StyleSheet.create({
     color: '#000000',
     fontSize: 12,
     fontWeight: 'bold',
+  },
+  presetContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#141414',
+    borderRadius: 8,
+    padding: 4,
+    borderWidth: 1,
+    borderColor: '#222222',
+    marginBottom: 16,
+  },
+  presetTab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 6,
+  },
+  presetTabActive: {
+    backgroundColor: '#FFFFFF',
+  },
+  presetTabDisabled: {
+    opacity: 0.4,
+  },
+  presetTabText: {
+    color: '#888888',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  presetTabTextActive: {
+    color: '#000000',
+    fontWeight: 'bold',
+  },
+  presetTabTextDisabled: {
+    color: '#555555',
+  },
+  soonBadge: {
+    backgroundColor: '#E74C3C',
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    marginLeft: 4,
+  },
+  soonBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 8,
+    fontWeight: 'bold',
+  },
+  presetDescPanel: {
+    backgroundColor: '#141414',
+    borderWidth: 1,
+    borderColor: '#222222',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+  },
+  presetDescTitle: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: 'bold',
+    marginBottom: 6,
+  },
+  presetDescText: {
+    color: '#888888',
+    fontSize: 12,
+    lineHeight: 16,
   },
 });
