@@ -20,5 +20,13 @@ abstract class AppDatabase : RoomDatabase() {
                     "appace_db"
                 ).fallbackToDestructiveMigration().build().also { INSTANCE = it }
             }
+
+        fun setTestInstance(instance: AppDatabase) {
+            INSTANCE = instance
+        }
+
+        fun clearTestInstance() {
+            INSTANCE = null
+        }
     }
 }

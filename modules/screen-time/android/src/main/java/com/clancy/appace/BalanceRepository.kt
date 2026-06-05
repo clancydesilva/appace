@@ -6,6 +6,14 @@ import java.time.LocalDateTime
 class BalanceRepository(context: Context) {
     private val dao = AppDatabase.getInstance(context).balanceDao()
 
+    companion object {
+        var testDateTime: LocalDateTime? = null
+    }
+
+    private fun getCurrentDateTime(): LocalDateTime {
+        return testDateTime ?: LocalDateTime.now()
+    }
+
     // Seeds default row on first launch — called from ForegroundService.onCreate()
     fun initIfEmpty() {
         if (dao.getBalance() == null) {
@@ -34,7 +42,7 @@ class BalanceRepository(context: Context) {
     fun hasTimeRemaining(): Boolean = getBalance().balanceSeconds > 0
 
     fun isWithinWindow(): Boolean {
-        val hour = LocalDateTime.now().hour
+        val hour = getCurrentDateTime().hour
         val b = getBalance()
         return hour >= b.windowStartHour && hour < b.windowEndHour
     }
@@ -66,7 +74,7 @@ class BalanceRepository(context: Context) {
 
     // Core daily logic — called by WorkManager every 15 mins. Idempotent by design.
     fun tick() {
-        val now = LocalDateTime.now()
+        val now = getCurrentDateTime()
         var current = getBalance()
         val todayStr = now.toLocalDate().toString()
         val currentHour = now.hour

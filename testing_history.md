@@ -132,3 +132,20 @@ Use this file to log every test run, errors encountered, changes made, and verif
 * **Command**: `./run-and-log.ps1`
 * **Result**: App compiled and booted successfully. Type-checking passed with no errors. Accessing the Apps screen successfully fetches both lists and filters out any stale/uninstalled tracked apps.
 * **Action taken**: Modified `app/(tabs)/apps.tsx` to perform uninstalled app cleanup using `useTimerStore.getState()` within the `useEffect` hook.
+
+---
+
+## [2026-06-05 10:51] Phase 7 Unit Testing Verification
+
+* **Test Goal**: Verify the core time-based accrual, reset, idempotency, and deduction behavior of the Room database and repository layer under simulated environments.
+* **Environment**: Robolectric JVM Unit Testing (Android SDK API 34), JUnit 4.
+
+###  Retry Run (Passed)
+* **Command**: `.\gradlew test`
+* **Result**: Compiles and executes cleanly. JUnit test suite reports 5 tests executed, 0 skipped, 0 failures, 0 errors:
+  * `testOpeningBalanceGrantedOnceAtWindowStart` - PASSED (5 mins opening balance granted at 6am start, subsequent tick calls are idempotent).
+  * `testHourlyAccrualIsIdempotent` - PASSED (subsequent hourly drops at 7am, 7:15am only accrue once).
+  * `testMidnightResetWipesBalance` - PASSED (advance to 12:05am on day 2 wipes balance to 0 and resets flags).
+  * `testDeductSecondsCannotGoBelowZero` - PASSED (deducting 15s from a balance of 10s limits to 0s).
+  * `testTickDoesNothingOutsideWindow` - PASSED (calling tick at 5am outside active hours does nothing).
+* **Action taken**: Added unit test dependencies to `modules/screen-time/android/build.gradle`. Updated `AppDatabase.kt` to allow mock instances. Introduced a static time-override companion configuration in `BalanceRepository.kt` to simulate mock dates/times. Developed `BalanceRepositoryTest.kt` with Robolectric test runners.
