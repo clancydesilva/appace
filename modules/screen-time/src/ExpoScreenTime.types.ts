@@ -11,3 +11,12 @@ export interface InstalledApp {
   name: string;
   package: string;
 }
+
+export interface TelemetryLog {
+  id: number;
+  timestamp: number;
+  event: string;
+  batteryPercent: number;
+  isCharging: boolean;
+  details: string;
+}

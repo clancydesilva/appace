@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import ScreenTime, { AppaceSettings, InstalledApp } from '../modules/screen-time';
+import ScreenTime, { AppaceSettings, InstalledApp, TelemetryLog } from '../modules/screen-time';
 
 interface TimerStore {
   balanceSeconds: number;
@@ -15,6 +15,7 @@ interface TimerStore {
   accessibilityEnabled: boolean;
   batteryOptimizationIgnored: boolean;
   onboardingCompleted: boolean;
+  telemetryLogs: TelemetryLog[];
 
   checkOnboarding: () => Promise<boolean>;
   setOnboardingCompleted: (completed: boolean) => Promise<void>;
@@ -34,6 +35,8 @@ interface TimerStore {
   openAccessibilitySettings: () => Promise<void>;
   openBatteryOptimizationSettings: () => Promise<void>;
   startService: () => Promise<void>;
+  fetchTelemetryLogs: () => Promise<void>;
+  clearTelemetryLogs: () => Promise<void>;
 
   maxDailyMinutes: () => number;
   minutesUntilNextDrop: () => number;
@@ -53,6 +56,7 @@ export const useTimerStore = create<TimerStore>((set, get) => ({
   accessibilityEnabled: false,
   batteryOptimizationIgnored: false,
   onboardingCompleted: false,
+  telemetryLogs: [],
 
   checkOnboarding: async () => {
     const completed = await ScreenTime.isOnboardingCompleted();
@@ -111,6 +115,11 @@ export const useTimerStore = create<TimerStore>((set, get) => ({
   openAccessibilitySettings: async () => ScreenTime.openAccessibilitySettings(),
   openBatteryOptimizationSettings: async () => ScreenTime.openBatteryOptimizationSettings(),
   startService: async () => ScreenTime.startForegroundService(),
+  fetchTelemetryLogs: async () => set({ telemetryLogs: await ScreenTime.getTelemetryLogs() }),
+  clearTelemetryLogs: async () => {
+    await ScreenTime.clearTelemetryLogs();
+    set({ telemetryLogs: [] });
+  },
 
   maxDailyMinutes: () => {
     const { windowStartHour, windowEndHour, openingBalanceMinutes, hourlyAccrualMinutes, accrualIntervalHours } = get();

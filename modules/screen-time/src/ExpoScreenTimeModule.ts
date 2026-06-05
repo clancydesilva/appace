@@ -1,5 +1,5 @@
 import { NativeModule, requireNativeModule } from 'expo';
-import { AppaceSettings, InstalledApp } from './ExpoScreenTime.types';
+import { AppaceSettings, InstalledApp, TelemetryLog } from './ExpoScreenTime.types';
 
 declare class ExpoScreenTimeModule extends NativeModule {
   getBalance(): Promise<number>;
@@ -20,6 +20,8 @@ declare class ExpoScreenTimeModule extends NativeModule {
   isBatteryOptimizationIgnored(): Promise<boolean>;
   openBatteryOptimizationSettings(): Promise<void>;
   startForegroundService(): Promise<void>;
+  getTelemetryLogs(): Promise<TelemetryLog[]>;
+  clearTelemetryLogs(): Promise<void>;
 }
 
 export default requireNativeModule<ExpoScreenTimeModule>('ExpoScreenTime');

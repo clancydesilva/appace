@@ -149,3 +149,29 @@ Use this file to log every test run, errors encountered, changes made, and verif
   * `testDeductSecondsCannotGoBelowZero` - PASSED (deducting 15s from a balance of 10s limits to 0s).
   * `testTickDoesNothingOutsideWindow` - PASSED (calling tick at 5am outside active hours does nothing).
 * **Action taken**: Added unit test dependencies to `modules/screen-time/android/build.gradle`. Updated `AppDatabase.kt` to allow mock instances. Introduced a static time-override companion configuration in `BalanceRepository.kt` to simulate mock dates/times. Developed `BalanceRepositoryTest.kt` with Robolectric test runners.
+
+---
+
+## [2026-06-05 11:16] Samsung S24 Fixes & Telemetry System Verification
+
+* **Test Goal**: Verify that package visibility permissions, filtered app queries, list layout settings, and the Room telemetry/diagnostics system compile and run successfully.
+* **Environment**: Robolectric JVM Unit Testing (Android SDK API 34), TypeScript type checking, host JVM compiler.
+
+### ❌ Initial Run (Failed)
+* **Error**: Kotlin compile failures in `ExpoScreenTimeModule.kt` (Unresolved reference 'AppDatabase', and type inference errors in `getTelemetryLogs` map) and `BalanceRepository.kt` (Unresolved reference 'context' when trying to access context in tick()). TypeScript errors due to missing `openAccessibilitySettings` type definition.
+* **Investigation**:
+  1. `context` was passed as a constructor parameter in `BalanceRepository` but not declared as a class property (`private val context: Context`), which restricted its scope to initialization blocks.
+  2. `AppDatabase` and `TelemetryEntity` were in package `com.clancy.appace` and needed explicit imports inside `ExpoScreenTimeModule.kt` (which resides in `expo.modules.screentime`).
+  3. Kotlin's compiler could not automatically infer the type mapping inside `getRecentLogs().map`, requiring an explicit lambda type signature `log: TelemetryEntity`.
+  4. Type checking in JS reported `openAccessibilitySettings` missing on `TimerStore` interface due to accidental removal during Zustand store edits.
+* **Action taken**:
+  1. Updated `BalanceRepository` to declare context as a class property: `class BalanceRepository(private val context: Context)`.
+  2. Added imports for `AppDatabase` and `TelemetryEntity` to `ExpoScreenTimeModule.kt`.
+  3. Annotated type explicitly in getTelemetryLogs map: `map { log: TelemetryEntity -> ... }`.
+  4. Added `openAccessibilitySettings: () => Promise<void>;` back to the Zustand store interface.
+
+###  Retry Run (Passed)
+* **Command**: `.\gradlew test` and `npx tsc --noEmit`
+* **Result**:
+  * Kotlin compilation succeeded. Robolectric unit tests passed cleanly (5/5 passing).
+  * TypeScript verification checks successfully completed with no errors.
