@@ -21,6 +21,14 @@ export default function AppsScreen() {
     setLoading(true);
     store.fetchInstalledApps()
       .then(() => store.fetchTrackedApps())
+      .then(() => {
+        const state = useTimerStore.getState();
+        const installedPackages = state.installedApps.map((a) => a.package);
+        const cleaned = state.trackedApps.filter((p) => installedPackages.includes(p));
+        if (cleaned.length !== state.trackedApps.length) {
+          return state.setTrackedApps(cleaned);
+        }
+      })
       .finally(() => setLoading(false));
   }, []);
 

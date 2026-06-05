@@ -120,3 +120,15 @@ Use this file to log every test run, errors encountered, changes made, and verif
   * Hides the "Continue" button for the compounding preset since it is not fully implemented.
   * Step 3 automatically advances to Step 4 once accessibility permission is turned ON.
   * Completing the onboarding lands on the Home Screen. Subsequent app launches boot straight to the Home Screen.
+
+---
+
+## [2026-06-05 10:43] Phase 6 Edge Case Hardening
+
+* **Test Goal**: Verify that uninstalled tracked apps are successfully cleaned up from the tracked apps list on loading the Apps screen.
+* **Environment**: Android Emulator (`Pixel_6_API_34i`), Expo SDK 54.
+
+###  Retry Run (Passed)
+* **Command**: `./run-and-log.ps1`
+* **Result**: App compiled and booted successfully. Type-checking passed with no errors. Accessing the Apps screen successfully fetches both lists and filters out any stale/uninstalled tracked apps.
+* **Action taken**: Modified `app/(tabs)/apps.tsx` to perform uninstalled app cleanup using `useTimerStore.getState()` within the `useEffect` hook.
