@@ -32,6 +32,7 @@ interface TimerStore {
   setBudgetType: (type: string) => Promise<void>;
   setAccrualInterval: (hours: number) => Promise<void>;
   setTrackedApps: (pkgs: string[]) => Promise<void>;
+  saveSettings: (start: number, end: number, opening: number, accrual: number, type: string, interval: number) => Promise<void>;
   openAccessibilitySettings: () => Promise<void>;
   openBatteryOptimizationSettings: () => Promise<void>;
   startService: () => Promise<void>;
@@ -111,6 +112,17 @@ export const useTimerStore = create<TimerStore>((set, get) => ({
   setTrackedApps: async (pkgs) => {
     await ScreenTime.setTrackedApps(pkgs);
     set({ trackedApps: pkgs });
+  },
+  saveSettings: async (start, end, opening, accrual, type, interval) => {
+    await ScreenTime.updateSettings(start, end, opening, accrual, type, interval);
+    set({
+      windowStartHour: start,
+      windowEndHour: end,
+      openingBalanceMinutes: opening,
+      hourlyAccrualMinutes: accrual,
+      budgetType: type,
+      accrualIntervalHours: interval,
+    });
   },
   openAccessibilitySettings: async () => ScreenTime.openAccessibilitySettings(),
   openBatteryOptimizationSettings: async () => ScreenTime.openBatteryOptimizationSettings(),

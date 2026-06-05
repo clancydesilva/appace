@@ -24,6 +24,7 @@ export default function SettingsScreen() {
   const [openingMinsStr, setOpeningMinsStr] = useState('');
   const [accrualMinsStr, setAccrualMinsStr] = useState('');
   const [accrualIntervalStr, setAccrualIntervalStr] = useState('');
+  const [selectedPreset, setSelectedPreset] = useState<'standard' | 'compounding' | 'custom'>('custom');
 
   // UI Expand/Collapse and Modal states
   const [expandedPreset, setExpandedPreset] = useState(false);
@@ -41,6 +42,7 @@ export default function SettingsScreen() {
       setOpeningMinsStr(String(state.openingBalanceMinutes));
       setAccrualMinsStr(String(state.hourlyAccrualMinutes));
       setAccrualIntervalStr(String(state.accrualIntervalHours));
+      setSelectedPreset(state.budgetType as any);
     });
 
     // Check permissions immediately
@@ -58,53 +60,85 @@ export default function SettingsScreen() {
     };
   }, []);
 
-  // Sync inputs with store on text change + save immediately
-  const handleUpdateStartHour = async (text: string) => {
+  const hasChanges = useMemo(() => {
+    return (
+      selectedPreset !== store.budgetType ||
+      parseInt(startHourStr) !== store.windowStartHour ||
+      parseInt(endHourStr) !== store.windowEndHour ||
+      parseInt(openingMinsStr) !== store.openingBalanceMinutes ||
+      parseInt(accrualMinsStr) !== store.hourlyAccrualMinutes ||
+      parseInt(accrualIntervalStr) !== store.accrualIntervalHours
+    );
+  }, [
+    selectedPreset,
+    startHourStr,
+    endHourStr,
+    openingMinsStr,
+    accrualMinsStr,
+    accrualIntervalStr,
+    store.budgetType,
+    store.windowStartHour,
+    store.windowEndHour,
+    store.openingBalanceMinutes,
+    store.hourlyAccrualMinutes,
+    store.accrualIntervalHours,
+  ]);
+
+  const isInputValid = useMemo(() => {
+    const start = parseInt(startHourStr);
+    const end = parseInt(endHourStr);
+    const opening = parseInt(openingMinsStr);
+    const accrual = parseInt(accrualMinsStr);
+    const interval = parseInt(accrualIntervalStr);
+
+    return (
+      !isNaN(start) && start >= 0 && start <= 23 &&
+      !isNaN(end) && end >= 1 && end <= 24 && end > start &&
+      !isNaN(opening) && opening >= 1 && opening <= 60 &&
+      !isNaN(accrual) && accrual >= 1 && accrual <= 60 &&
+      !isNaN(interval) && interval >= 1 && interval <= 24
+    );
+  }, [startHourStr, endHourStr, openingMinsStr, accrualMinsStr, accrualIntervalStr]);
+
+  const previewMaxDaily = useMemo(() => {
+    const start = parseInt(startHourStr) || 0;
+    const end = parseInt(endHourStr) || 0;
+    const opening = parseInt(openingMinsStr) || 0;
+    const accrual = parseInt(accrualMinsStr) || 0;
+    const interval = parseInt(accrualIntervalStr) || 1;
+
+    let drops = 0;
+    for (let hr = start + 1; hr < end; hr++) {
+      if ((hr - start) % interval === 0) {
+        drops++;
+      }
+    }
+    return opening + (drops * accrual);
+  }, [startHourStr, endHourStr, openingMinsStr, accrualMinsStr, accrualIntervalStr]);
+
+  // Sync inputs with local state
+  const handleUpdateStartHour = (text: string) => {
     setStartHourStr(text);
-    const parsed = parseInt(text);
-    if (!isNaN(parsed) && parsed >= 0 && parsed <= 23) {
-      await store.setWindowHours(parsed, store.windowEndHour);
-    }
   };
 
-  const handleUpdateEndHour = async (text: string) => {
+  const handleUpdateEndHour = (text: string) => {
     setEndHourStr(text);
-    const parsed = parseInt(text);
-    if (!isNaN(parsed) && parsed >= 1 && parsed <= 24) {
-      await store.setWindowHours(store.windowStartHour, parsed);
-    }
   };
 
-  const handleUpdateOpening = async (text: string) => {
+  const handleUpdateOpening = (text: string) => {
     setOpeningMinsStr(text);
-    const parsed = parseInt(text);
-    if (!isNaN(parsed) && parsed >= 1 && parsed <= 60) {
-      await store.setOpeningBalance(parsed);
-    }
   };
 
-  const handleUpdateAccrual = async (text: string) => {
+  const handleUpdateAccrual = (text: string) => {
     setAccrualMinsStr(text);
-    const parsed = parseInt(text);
-    if (!isNaN(parsed) && parsed >= 1 && parsed <= 60) {
-      await store.setHourlyAccrual(parsed);
-    }
   };
 
-  const handleUpdateAccrualInterval = async (text: string) => {
+  const handleUpdateAccrualInterval = (text: string) => {
     setAccrualIntervalStr(text);
-    const parsed = parseInt(text);
-    if (!isNaN(parsed) && parsed >= 1 && parsed <= 24) {
-      await store.setAccrualInterval(parsed);
-    }
   };
 
-  const handleSelectStandard = async () => {
-    await store.setBudgetType('standard');
-    await store.setWindowHours(6, 22);
-    await store.setOpeningBalance(5);
-    await store.setHourlyAccrual(5);
-    await store.setAccrualInterval(1);
+  const handleSelectStandard = () => {
+    setSelectedPreset('standard');
     setStartHourStr('6');
     setEndHourStr('22');
     setOpeningMinsStr('5');
@@ -112,12 +146,25 @@ export default function SettingsScreen() {
     setAccrualIntervalStr('1');
   };
 
-  const handleSelectCompounding = async () => {
-    await store.setBudgetType('compounding');
+  const handleSelectCustom = () => {
+    setSelectedPreset('custom');
+    setStartHourStr(String(store.windowStartHour));
+    setEndHourStr(String(store.windowEndHour));
+    setOpeningMinsStr(String(store.openingBalanceMinutes));
+    setAccrualMinsStr(String(store.hourlyAccrualMinutes));
+    setAccrualIntervalStr(String(store.accrualIntervalHours));
   };
 
-  const handleSelectCustom = async () => {
-    await store.setBudgetType('custom');
+  const handleConfirmChanges = async () => {
+    const start = parseInt(startHourStr);
+    const end = parseInt(endHourStr);
+    const opening = parseInt(openingMinsStr);
+    const accrual = parseInt(accrualMinsStr);
+    const interval = parseInt(accrualIntervalStr);
+
+    if (isInputValid) {
+      await store.saveSettings(start, end, opening, accrual, selectedPreset, interval);
+    }
   };
 
   const handleOpenDiagnostics = async () => {
@@ -248,14 +295,14 @@ export default function SettingsScreen() {
                   <TouchableOpacity
                     style={[
                       styles.presetTab,
-                      store.budgetType === 'standard' && styles.presetTabActive,
+                      selectedPreset === 'standard' && styles.presetTabActive,
                     ]}
                     onPress={handleSelectStandard}
                   >
                     <Text
                       style={[
                         styles.presetTabText,
-                        store.budgetType === 'standard' && styles.presetTabTextActive,
+                        selectedPreset === 'standard' && styles.presetTabTextActive,
                       ]}
                     >
                       Standard
@@ -265,16 +312,11 @@ export default function SettingsScreen() {
                   <TouchableOpacity
                     style={[
                       styles.presetTab,
-                      store.budgetType === 'compounding' && styles.presetTabActive,
+                      styles.presetTabDisabled,
                     ]}
-                    onPress={handleSelectCompounding}
+                    disabled={true}
                   >
-                    <Text
-                      style={[
-                        styles.presetTabText,
-                        store.budgetType === 'compounding' && styles.presetTabTextActive,
-                      ]}
-                    >
+                    <Text style={styles.presetTabTextDisabled}>
                       Compounding
                     </Text>
                   </TouchableOpacity>
@@ -282,14 +324,14 @@ export default function SettingsScreen() {
                   <TouchableOpacity
                     style={[
                       styles.presetTab,
-                      store.budgetType === 'custom' && styles.presetTabActive,
+                      selectedPreset === 'custom' && styles.presetTabActive,
                     ]}
                     onPress={handleSelectCustom}
                   >
                     <Text
                       style={[
                         styles.presetTabText,
-                        store.budgetType === 'custom' && styles.presetTabTextActive,
+                        selectedPreset === 'custom' && styles.presetTabTextActive,
                       ]}
                     >
                       Custom
@@ -297,7 +339,7 @@ export default function SettingsScreen() {
                   </TouchableOpacity>
                 </View>
 
-                {store.budgetType === 'standard' && (
+                {selectedPreset === 'standard' && (
                   <View style={styles.presetDescPanel}>
                     <Text style={styles.presetDescTitle}>Standard Mode Locked Details</Text>
                     <Text style={styles.presetDescText}>
@@ -309,7 +351,7 @@ export default function SettingsScreen() {
                   </View>
                 )}
 
-                {store.budgetType === 'compounding' && (
+                {selectedPreset === 'compounding' && (
                   <View style={[styles.presetDescPanel, { borderColor: '#1F1212', backgroundColor: '#0F0909' }]}>
                     <Text style={[styles.presetDescTitle, { color: '#E74C3C' }]}>
                       Compounding Budget
@@ -320,7 +362,7 @@ export default function SettingsScreen() {
                   </View>
                 )}
 
-                {store.budgetType === 'custom' && (
+                {selectedPreset === 'custom' && (
                   <View style={styles.presetDescPanel}>
                     <Text style={styles.presetDescTitle}>Custom Mode Enabled</Text>
                     <Text style={styles.presetDescText}>
@@ -329,7 +371,7 @@ export default function SettingsScreen() {
                   </View>
                 )}
 
-                {store.budgetType === 'custom' && (
+                {selectedPreset === 'custom' && (
                   <View style={styles.customConfigBlock}>
                     <View style={styles.inputRow}>
                       <View style={styles.inputContainer}>
@@ -343,7 +385,7 @@ export default function SettingsScreen() {
                           placeholderTextColor="#444"
                         />
                         <Text style={styles.inputSubtext}>
-                          {formatHourLabel(store.windowStartHour)}
+                          {formatHourLabel(parseInt(startHourStr) || 0)}
                         </Text>
                       </View>
 
@@ -358,7 +400,7 @@ export default function SettingsScreen() {
                           placeholderTextColor="#444"
                         />
                         <Text style={styles.inputSubtext}>
-                          {formatHourLabel(store.windowEndHour)}
+                          {formatHourLabel(parseInt(endHourStr) || 0)}
                         </Text>
                       </View>
                     </View>
@@ -401,7 +443,7 @@ export default function SettingsScreen() {
                           placeholderTextColor="#444"
                         />
                         <Text style={styles.inputSubtext}>
-                          Drops occur every {store.accrualIntervalHours} hour{store.accrualIntervalHours > 1 ? 's' : ''}
+                          Drops occur every {parseInt(accrualIntervalStr) || 1} hour{parseInt(accrualIntervalStr) > 1 ? 's' : ''}
                         </Text>
                       </View>
                       <View style={styles.inputContainer} />
@@ -410,20 +452,41 @@ export default function SettingsScreen() {
                 )}
 
                 {/* Plain English Summary */}
-                {store.budgetType !== 'compounding' && (
+                {selectedPreset !== 'compounding' && (
                   <View style={styles.summaryPanel}>
                     <Text style={styles.summaryTitle}>Live Formula Summary</Text>
                     <Text style={styles.summaryText}>
-                      Start with <Text style={styles.highlightText}>{store.openingBalanceMinutes} mins</Text> at{' '}
-                      <Text style={styles.highlightText}>{formatHourLabel(store.windowStartHour)}</Text>, earning{' '}
-                      <Text style={styles.highlightText}>{store.hourlyAccrualMinutes} mins</Text>{' '}
-                      {store.accrualIntervalHours === 1 ? 'each hour' : `every ${store.accrualIntervalHours} hours`}{' '}
-                      until <Text style={styles.highlightText}>{formatHourLabel(store.windowEndHour)}</Text>.
+                      Start with <Text style={styles.highlightText}>{openingMinsStr || '0'} mins</Text> at{' '}
+                      <Text style={styles.highlightText}>{formatHourLabel(parseInt(startHourStr) || 0)}</Text>, earning{' '}
+                      <Text style={styles.highlightText}>{accrualMinsStr || '0'} mins</Text>{' '}
+                      {parseInt(accrualIntervalStr) === 1 ? 'each hour' : `every ${accrualIntervalStr || '1'} hours`}{' '}
+                      until <Text style={styles.highlightText}>{formatHourLabel(parseInt(endHourStr) || 0)}</Text>.
                     </Text>
                     <Text style={styles.summaryMax}>
-                      Max budget today: <Text style={styles.highlightText}>{computedMaxDaily} minutes</Text>
+                      Max budget today: <Text style={styles.highlightText}>{previewMaxDaily} minutes</Text>
                     </Text>
                   </View>
+                )}
+
+                {/* Confirm Changes Button */}
+                {hasChanges && (
+                  <TouchableOpacity
+                    style={[
+                      styles.confirmButton,
+                      !isInputValid && styles.confirmButtonDisabled,
+                    ]}
+                    disabled={!isInputValid}
+                    onPress={handleConfirmChanges}
+                  >
+                    <Text
+                      style={[
+                        styles.confirmButtonText,
+                        { color: isInputValid ? '#000000' : '#888888' },
+                      ]}
+                    >
+                      {isInputValid ? 'Confirm Changes' : 'Invalid Parameters'}
+                    </Text>
+                  </TouchableOpacity>
                 )}
               </View>
             )}
@@ -1003,5 +1066,38 @@ const styles = StyleSheet.create({
     fontSize: 11,
     textAlign: 'center',
     lineHeight: 15,
+  },
+  presetTabDisabled: {
+    backgroundColor: '#141414',
+    opacity: 0.4,
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 6,
+  },
+  presetTabTextDisabled: {
+    color: '#555555',
+    fontSize: 13,
+    fontWeight: '600',
+    textDecorationLine: 'line-through',
+  },
+  confirmButton: {
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 16,
+  },
+  confirmButtonDisabled: {
+    backgroundColor: '#1C1C1C',
+    opacity: 0.5,
+  },
+  confirmButtonText: {
+    fontSize: 12,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
 });

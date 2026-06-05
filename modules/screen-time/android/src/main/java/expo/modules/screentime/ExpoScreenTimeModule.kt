@@ -123,6 +123,30 @@ class ExpoScreenTimeModule : Module() {
             }
         }
 
+        AsyncFunction("updateSettings") { start: Int, end: Int, opening: Int, accrual: Int, type: String, interval: Int, promise: Promise ->
+            scope.launch {
+                try {
+                    val b = repo.getBalance()
+                    val now = BalanceRepository.testDateTime ?: java.time.LocalDateTime.now()
+                    val currentHour = now.hour
+                    val updated = b.copy(
+                        windowStartHour = start,
+                        windowEndHour = end,
+                        openingBalanceSeconds = opening * 60L,
+                        hourlyAccrualSeconds = accrual * 60L,
+                        budgetType = type,
+                        accrualIntervalHours = interval,
+                        lastAccrualHour = if (currentHour >= start) minOf(currentHour, end - 1) else start - 1
+                    )
+                    AppDatabase.getInstance(context).balanceDao().upsert(updated)
+                    repo.tick()
+                    promise.resolve(null)
+                } catch (e: Exception) {
+                    promise.reject("ERR_DB", e.message, e)
+                }
+            }
+        }
+
         AsyncFunction("isOnboardingCompleted") { ->
             prefs.getBoolean("onboarding_completed", false)
         }
