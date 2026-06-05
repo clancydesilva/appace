@@ -3,7 +3,7 @@ package com.clancy.appace
 import android.content.Context
 import java.time.LocalDateTime
 
-class BalanceRepository(context: Context) {
+class BalanceRepository(private val context: Context) {
     private val dao = AppDatabase.getInstance(context).balanceDao()
 
     companion object {
@@ -101,6 +101,7 @@ class BalanceRepository(context: Context) {
                 lastAccrualHour = current.windowStartHour
             )
             dao.upsert(current)
+            TelemetryLogger.log(context, "TICK", "Opening balance granted: ${current.openingBalanceSeconds / 60}m. Balance: ${current.balanceSeconds / 60}m")
             return
         }
 
@@ -108,11 +109,13 @@ class BalanceRepository(context: Context) {
         // No notification fired here — silent drop by design
         if (currentHour > current.lastAccrualHour) {
             var updatedBalance = current.balanceSeconds
+            var accrualsCount = 0
             for (hr in (current.lastAccrualHour + 1)..currentHour) {
                 if (hr < current.windowEndHour) {
                     val hoursSinceStart = hr - current.windowStartHour
                     if (hoursSinceStart >= 0 && hoursSinceStart % current.accrualIntervalHours == 0) {
                         updatedBalance += current.hourlyAccrualSeconds
+                        accrualsCount++
                     }
                 }
             }
@@ -123,7 +126,16 @@ class BalanceRepository(context: Context) {
                     lastAccrualHour = targetLastAccrual
                 )
                 dao.upsert(current)
+                if (accrualsCount > 0) {
+                    TelemetryLogger.log(context, "TICK", "Accrual granted (${accrualsCount}x). Balance: ${current.balanceSeconds / 60}m")
+                } else {
+                    TelemetryLogger.log(context, "TICK", "Periodic check. Balance: ${current.balanceSeconds / 60}m")
+                }
+            } else {
+                TelemetryLogger.log(context, "TICK", "Periodic check. Balance: ${current.balanceSeconds / 60}m")
             }
+        } else {
+            TelemetryLogger.log(context, "TICK", "Periodic check. Balance: ${current.balanceSeconds / 60}m")
         }
 
         /*

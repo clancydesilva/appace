@@ -62,6 +62,7 @@ class AppWatcherService : AccessibilityService() {
                 }
 
                 if (!repo.hasTimeRemaining() && repo.isWithinWindow()) {
+                    TelemetryLogger.log(applicationContext, "BLOCK", "Redirected $pkg (0s remaining)")
                     launchTimesUpScreen()
                     currentTrackedApp = null
                 }
@@ -80,6 +81,13 @@ class AppWatcherService : AccessibilityService() {
         }
     }
 
+    override fun onServiceConnected() {
+        super.onServiceConnected()
+        Thread {
+            TelemetryLogger.log(applicationContext, "SERVICE_START", "AppWatcherService accessibility active")
+        }.start()
+    }
+
     private fun launchTimesUpScreen() {
         val intent = Intent(this, Class.forName("com.clancy.appace.MainActivity")).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK
@@ -91,6 +99,9 @@ class AppWatcherService : AccessibilityService() {
     override fun onInterrupt() {}
 
     override fun onDestroy() {
+        Thread {
+            TelemetryLogger.log(applicationContext, "SERVICE_STOP", "AppWatcherService accessibility destroyed")
+        }.start()
         scope.cancel()
         super.onDestroy()
     }

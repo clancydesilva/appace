@@ -5,6 +5,8 @@ import android.content.SharedPreferences
 import android.content.Intent
 import com.clancy.appace.BalanceRepository
 import com.clancy.appace.ForegroundService
+import com.clancy.appace.AppDatabase
+import com.clancy.appace.TelemetryEntity
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.kotlin.Promise
@@ -141,8 +143,15 @@ class ExpoScreenTimeModule : Module() {
             scope.launch {
                 try {
                     val pm = context.packageManager
+                    val launcherIntent = Intent(Intent.ACTION_MAIN, null).apply {
+                        addCategory(Intent.CATEGORY_LAUNCHER)
+                    }
+                    val launcherApps = pm.queryIntentActivities(launcherIntent, 0)
+                        .map { it.activityInfo.packageName }
+                        .toSet()
+
                     val apps = pm.getInstalledApplications(0)
-                        .filter { it.packageName != context.packageName }
+                        .filter { it.packageName != context.packageName && launcherApps.contains(it.packageName) }
                         .map { mapOf("name" to (pm.getApplicationLabel(it).toString()), "package" to it.packageName) }
                     promise.resolve(apps)
                 } catch (e: Exception) {
@@ -182,6 +191,39 @@ class ExpoScreenTimeModule : Module() {
         AsyncFunction("startForegroundService") { ->
             context.startForegroundService(Intent(context, ForegroundService::class.java))
             Unit
+        }
+
+        AsyncFunction("getTelemetryLogs") { promise: Promise ->
+            scope.launch {
+                try {
+                    val db = AppDatabase.getInstance(context)
+                    val logs = db.telemetryDao().getRecentLogs().map { log: TelemetryEntity ->
+                        mapOf(
+                            "id" to log.id,
+                            "timestamp" to log.timestamp,
+                            "event" to log.event,
+                            "batteryPercent" to log.batteryPercent,
+                            "isCharging" to log.isCharging,
+                            "details" to log.details
+                        )
+                    }
+                    promise.resolve(logs)
+                } catch (e: Exception) {
+                    promise.reject("ERR_DB", e.message, e)
+                }
+            }
+        }
+
+        AsyncFunction("clearTelemetryLogs") { promise: Promise ->
+            scope.launch {
+                try {
+                    val db = AppDatabase.getInstance(context)
+                    db.telemetryDao().clearLogs()
+                    promise.resolve(null)
+                } catch (e: Exception) {
+                    promise.reject("ERR_DB", e.message, e)
+                }
+            }
         }
     }
 }

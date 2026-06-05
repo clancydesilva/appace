@@ -5,9 +5,10 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 
-@Database(entities = [BalanceEntity::class], version = 2, exportSchema = false)
+@Database(entities = [BalanceEntity::class, TelemetryEntity::class], version = 3, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun balanceDao(): BalanceDao
+    abstract fun telemetryDao(): TelemetryDao
 
     companion object {
         @Volatile private var INSTANCE: AppDatabase? = null
