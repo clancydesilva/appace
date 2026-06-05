@@ -159,7 +159,13 @@ export default function OnboardingScreen() {
 
   const filteredApps = store.installedApps
     .filter((app) => app.name.toLowerCase().includes(searchQuery.toLowerCase()))
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .sort((a, b) => {
+      const aTracked = store.trackedApps.includes(a.package);
+      const bTracked = store.trackedApps.includes(b.package);
+      if (aTracked && !bTracked) return -1;
+      if (!aTracked && bTracked) return 1;
+      return a.name.localeCompare(b.name);
+    });
 
   const renderDotIndicator = () => (
     <View style={styles.indicatorContainer}>
@@ -266,9 +272,6 @@ export default function OnboardingScreen() {
                   >
                     Compounding
                   </Text>
-                  <View style={styles.soonBadge}>
-                    <Text style={styles.soonBadgeText}>Soon</Text>
-                  </View>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -304,7 +307,7 @@ export default function OnboardingScreen() {
               {budgetType === 'compounding' && (
                 <View style={[styles.presetDescPanel, { borderColor: '#1F1212', backgroundColor: '#0F0909' }]}>
                   <Text style={[styles.presetDescTitle, { color: '#E74C3C' }]}>
-                    Compounding Budget (Coming Soon)
+                    Compounding Budget
                   </Text>
                   <Text style={[styles.presetDescText, { color: '#BB8888' }]}>
                     Encourage delayed gratification! For every hour you go without using a tracked app, the more you get when you do. Stay locked in for longer!

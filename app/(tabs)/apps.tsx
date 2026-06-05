@@ -49,7 +49,13 @@ export default function AppsScreen() {
 
   const filteredApps = store.installedApps
     .filter((app) => app.name.toLowerCase().includes(searchQuery.toLowerCase()))
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .sort((a, b) => {
+      const aTracked = store.trackedApps.includes(a.package);
+      const bTracked = store.trackedApps.includes(b.package);
+      if (aTracked && !bTracked) return -1;
+      if (!aTracked && bTracked) return 1;
+      return a.name.localeCompare(b.name);
+    });
 
   return (
     <SafeAreaView style={styles.safeArea}>
