@@ -11,6 +11,7 @@ class AppWatcherService : AccessibilityService() {
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var currentTrackedApp: String? = null
     private var usageStartTime: Long = 0
+    private var activeTrackingJob: Job? = null
 
     private val IGNORED_PACKAGES by lazy {
         setOf(
@@ -36,6 +37,7 @@ class AppWatcherService : AccessibilityService() {
             val startTime = usageStartTime
             if (prevApp != null) {
                 currentTrackedApp = null
+                activeTrackingJob?.cancel()
                 scope.launch {
                     val secondsUsed = (System.currentTimeMillis() - startTime) / 1000
                     repo.deductSeconds(secondsUsed)
@@ -54,7 +56,8 @@ class AppWatcherService : AccessibilityService() {
             currentTrackedApp = pkg
             usageStartTime = System.currentTimeMillis()
 
-            scope.launch {
+            activeTrackingJob?.cancel()
+            activeTrackingJob = scope.launch {
                 // If we switched directly from another tracked app, deduct its time first
                 if (prevApp != null && prevApp != pkg) {
                     val secondsUsed = (System.currentTimeMillis() - startTime) / 1000
@@ -65,6 +68,23 @@ class AppWatcherService : AccessibilityService() {
                     TelemetryLogger.log(applicationContext, "BLOCK", "Redirected $pkg (0s remaining)")
                     launchTimesUpScreen()
                     currentTrackedApp = null
+                    return@launch
+                }
+
+                // Active loop: check & deduct every 5 seconds
+                while (currentTrackedApp == pkg && isActive) {
+                    delay(5000)
+                    if (currentTrackedApp != pkg || !isActive) break
+
+                    repo.deductSeconds(5L)
+                    usageStartTime = System.currentTimeMillis()
+
+                    if (!repo.hasTimeRemaining() && repo.isWithinWindow()) {
+                        TelemetryLogger.log(applicationContext, "BLOCK", "Active limit hit inside $pkg (0s remaining)")
+                        launchTimesUpScreen()
+                        currentTrackedApp = null
+                        break
+                    }
                 }
             }
         } else {
@@ -73,6 +93,7 @@ class AppWatcherService : AccessibilityService() {
             val startTime = usageStartTime
             if (prevApp != null) {
                 currentTrackedApp = null
+                activeTrackingJob?.cancel()
                 scope.launch {
                     val secondsUsed = (System.currentTimeMillis() - startTime) / 1000
                     repo.deductSeconds(secondsUsed)
