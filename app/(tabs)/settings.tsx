@@ -410,19 +410,21 @@ export default function SettingsScreen() {
                 )}
 
                 {/* Plain English Summary */}
-                <View style={styles.summaryPanel}>
-                  <Text style={styles.summaryTitle}>Live Formula Summary</Text>
-                  <Text style={styles.summaryText}>
-                    Start with <Text style={styles.highlightText}>{store.openingBalanceMinutes} mins</Text> at{' '}
-                    <Text style={styles.highlightText}>{formatHourLabel(store.windowStartHour)}</Text>, earning{' '}
-                    <Text style={styles.highlightText}>{store.hourlyAccrualMinutes} mins</Text>{' '}
-                    {store.accrualIntervalHours === 1 ? 'each hour' : `every ${store.accrualIntervalHours} hours`}{' '}
-                    until <Text style={styles.highlightText}>{formatHourLabel(store.windowEndHour)}</Text>.
-                  </Text>
-                  <Text style={styles.summaryMax}>
-                    Max budget today: <Text style={styles.highlightText}>{computedMaxDaily} minutes</Text>
-                  </Text>
-                </View>
+                {store.budgetType !== 'compounding' && (
+                  <View style={styles.summaryPanel}>
+                    <Text style={styles.summaryTitle}>Live Formula Summary</Text>
+                    <Text style={styles.summaryText}>
+                      Start with <Text style={styles.highlightText}>{store.openingBalanceMinutes} mins</Text> at{' '}
+                      <Text style={styles.highlightText}>{formatHourLabel(store.windowStartHour)}</Text>, earning{' '}
+                      <Text style={styles.highlightText}>{store.hourlyAccrualMinutes} mins</Text>{' '}
+                      {store.accrualIntervalHours === 1 ? 'each hour' : `every ${store.accrualIntervalHours} hours`}{' '}
+                      until <Text style={styles.highlightText}>{formatHourLabel(store.windowEndHour)}</Text>.
+                    </Text>
+                    <Text style={styles.summaryMax}>
+                      Max budget today: <Text style={styles.highlightText}>{computedMaxDaily} minutes</Text>
+                    </Text>
+                  </View>
+                )}
               </View>
             )}
           </View>
@@ -848,6 +850,7 @@ const styles = StyleSheet.create({
   modalContainer: {
     flex: 1,
     backgroundColor: '#0D0D0D',
+    paddingTop: Platform.OS === 'android' ? 20 : 0,
   },
   modalHeader: {
     flexDirection: 'row',

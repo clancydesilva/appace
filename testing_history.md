@@ -175,3 +175,31 @@ Use this file to log every test run, errors encountered, changes made, and verif
 * **Result**:
   * Kotlin compilation succeeded. Robolectric unit tests passed cleanly (5/5 passing).
   * TypeScript verification checks successfully completed with no errors.
+
+---
+
+## [2026-06-05 12:12] Phase 7 Final Daily Prep & UI Polish
+
+* **Test Goal**: Verify that settings layout status bar padding, compounding live formula hide, and app/preference reset functionality work correctly on the physical Samsung Galaxy S24 device.
+* **Environment**: Physical Samsung Galaxy S24 (`R3CX908LHVM`), Expo SDK 54.
+
+### ❌ Initial Run (Failed)
+* **Error**: The Diagnostics Modal header was overlapping with the device status bar (time and battery symbols) on Samsung Galaxy S24. The Live Formula Summary panel was visible even when the Compounding preset was active (confusing since compounding is not a linear/simple budget type). The 1-minute test override caused balance resets when opening the blocking screen repeatedly.
+* **Investigation**:
+  1. On Android, `SafeAreaView` inside a `Modal` does not automatically add top padding for the status bar.
+  2. The Compounding preset selected state was still rendering the general `<View style={styles.summaryPanel}>` with standard daily budgets.
+  3. The active balance monitoring service required restoring normal hourly accruals to avoid immediate block resets.
+* **Action taken**:
+  1. Added `paddingTop: Platform.OS === 'android' ? 20 : 0` to `modalContainer` in `app/(tabs)/settings.tsx`.
+  2. Wrapped `summaryPanel` with a conditional check `{store.budgetType !== 'compounding' && ...}` in `app/(tabs)/settings.tsx`.
+  3. Reverted the temporary 1-minute limit override in native Kotlin logic.
+  4. Reset the local app data using `adb shell pm clear com.clancy.appace` to ensure fresh onboarding and preferences state.
+
+###  Retry Run (Passed)
+* **Command**: `./run-and-log.ps1`
+* **Result**:
+  * App compiled, installed, and booted into the Onboarding flow.
+  * Settings screen displays the correct status bar alignment on S24 (header text pushed down safely below status bar icons).
+  * Selection of Compounding preset successfully hides the Live Formula Summary.
+  * Active monitoring loops successfully check and deduct time without resetting limits to 1 minute.
+
