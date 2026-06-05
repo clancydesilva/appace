@@ -203,3 +203,32 @@ Use this file to log every test run, errors encountered, changes made, and verif
   * Selection of Compounding preset successfully hides the Live Formula Summary.
   * Active monitoring loops successfully check and deduct time without resetting limits to 1 minute.
 
+---
+
+## [2026-06-05 12:25] Phase 7 Settings Confirmation Flow & Validation
+
+* **Test Goal**: Verify that settings are only saved upon clicking "Confirm Changes", compounding cannot be selected (tab is locked/disabled), changes apply going forward without resetting current balance from morning (preventing retroactive catch-ups), and TypeScript/Kotlin builds compile cleanly.
+* **Environment**: Physical Samsung Galaxy S24 (`R3CX908LHVM`), Expo SDK 54.
+
+### ❌ Initial Run (Failed)
+* **Error**: Editing custom parameters in Settings saved immediately on text changes, causing multiple rapid database writes and triggering `tick()` which retroactively caught up hourly accruals using incorrect intermediary parameters. Compounding preset tab was selectable even though the compounding backend logic is still a future TODO.
+* **Investigation**:
+  1. The UI was bound directly to store setters on every character change.
+  2. The native bridge lacked a unified `updateSettings` endpoint that sets `lastAccrualHour` to the current hour, preventing catch-up loops from the morning start hour.
+* **Action taken**:
+  1. Added `updateSettings` native method in `ExpoScreenTimeModule.kt` that saves start/end window hours, opening, hourly accrual, and preset type, setting `lastAccrualHour` to the current hour (safely aligned with window boundaries and mock unit testing environments) to prevent retroactive hourly accrual catches.
+  2. Integrated `saveSettings` action into Zustand `useTimerStore.ts`.
+  3. Refactored `app/(tabs)/settings.tsx` to bind inputs to local state variables (`selectedPreset`, `startHourStr`, etc.) and dynamically compute live max daily previews (`previewMaxDaily`).
+  4. Disabled and greyed out the "Compounding" preset tab in `settings.tsx` to prevent it from being chosen.
+  5. Added a "Confirm Changes" button that appears only when local configuration differs from the DB, and disabled it if validation checks fail.
+  6. Staged and committed changes.
+
+###  Retry Run (Passed)
+* **Command**: `npx tsc --noEmit` and `.\gradlew test`
+* **Result**:
+  * TypeScript verification succeeded with zero errors.
+  * Kotlin unit tests successfully built and executed, passing 100% of the cases.
+  * Selection of Standard vs Custom presets updates the preview dynamically without changing database state until clicking "Confirm Changes".
+  * Compounding preset is locked and unclickable in Settings.
+
+
