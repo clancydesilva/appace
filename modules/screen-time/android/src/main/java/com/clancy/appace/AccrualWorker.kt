@@ -18,6 +18,18 @@ class AccrualWorker(context: Context, params: WorkerParameters)
         return withContext(Dispatchers.IO) {
             try {
                 BalanceRepository(applicationContext).tick()
+                
+                try {
+                    val serviceIntent = android.content.Intent(applicationContext, ForegroundService::class.java)
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                        applicationContext.startForegroundService(serviceIntent)
+                    } else {
+                        applicationContext.startService(serviceIntent)
+                    }
+                } catch (e: Exception) {
+                    TelemetryLogger.log(applicationContext, "SERVICE_START_ERR", "Worker failed to start service: ${e.message}")
+                }
+
                 Result.success()
             } catch (e: Exception) {
                 Result.retry()

@@ -49,6 +49,7 @@ class AppWatcherService : AccessibilityService() {
         val trackedApps = getTrackedApps()
 
         if (pkg in trackedApps) {
+            startForegroundServiceIfNeeded()
             val prevApp = currentTrackedApp
             val startTime = usageStartTime
             
@@ -102,10 +103,24 @@ class AppWatcherService : AccessibilityService() {
         }
     }
 
+    private fun startForegroundServiceIfNeeded() {
+        try {
+            val serviceIntent = Intent(applicationContext, ForegroundService::class.java)
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                applicationContext.startForegroundService(serviceIntent)
+            } else {
+                applicationContext.startService(serviceIntent)
+            }
+        } catch (e: Exception) {
+            TelemetryLogger.log(applicationContext, "SERVICE_START_ERR", "AppWatcherService failed to start service: ${e.message}")
+        }
+    }
+
     override fun onServiceConnected() {
         super.onServiceConnected()
         Thread {
             TelemetryLogger.log(applicationContext, "SERVICE_START", "AppWatcherService accessibility active")
+            startForegroundServiceIfNeeded()
         }.start()
     }
 
