@@ -2,7 +2,7 @@
   "expo": {
     "name": "Appace",
     "slug": "appace",
-    "version": "1.0.0",
+    "version": "0.0.3",
     "scheme": "appace",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
