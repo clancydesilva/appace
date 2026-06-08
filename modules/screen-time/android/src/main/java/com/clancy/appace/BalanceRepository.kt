@@ -14,29 +14,29 @@ class BalanceRepository(private val context: Context) {
         return testDateTime ?: LocalDateTime.now()
     }
 
+    private fun createDefaultBalance() = BalanceEntity(
+        balanceSeconds = 0,
+        windowStartHour = 6,
+        windowEndHour = 24,
+        openingBalanceSeconds = 300,   // 5 mins
+        hourlyAccrualSeconds = 300,    // 5 mins
+        lastAccrualHour = -1,
+        lastResetDate = "",
+        windowOpenGrantedToday = false,
+        budgetType = "custom",
+        accrualIntervalHours = 1
+    )
+
     // Seeds default row on first launch — called from ForegroundService.onCreate()
     fun initIfEmpty() {
         if (dao.getBalance() == null) {
-            dao.upsert(
-                BalanceEntity(
-                    balanceSeconds = 0,
-                    windowStartHour = 6,
-                    windowEndHour = 24,
-                    openingBalanceSeconds = 300,   // 5 mins
-                    hourlyAccrualSeconds = 300,    // 5 mins
-                    lastAccrualHour = -1,
-                    lastResetDate = "",
-                    windowOpenGrantedToday = false,
-                    budgetType = "custom",
-                    accrualIntervalHours = 1
-                )
-            )
+            dao.upsert(createDefaultBalance())
         }
     }
 
     fun getBalance(): BalanceEntity {
         initIfEmpty()
-        return dao.getBalance()!!
+        return dao.getBalance() ?: createDefaultBalance()
     }
 
     fun hasTimeRemaining(): Boolean = getBalance().balanceSeconds > 0
