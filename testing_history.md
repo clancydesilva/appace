@@ -231,4 +231,24 @@ Use this file to log every test run, errors encountered, changes made, and verif
   * Selection of Standard vs Custom presets updates the preview dynamically without changing database state until clicking "Confirm Changes".
   * Compounding preset is locked and unclickable in Settings.
 
+---
+
+## [2026-06-07 16:18] Self-Healing Foreground Service Restart (Bug Fix)
+
+* **Test Goal**: Fix the issue where balance accruals execute correctly in the background, but screen tracking and time deduction cease to function on consecutive days because the main app process / Foreground Service has been killed overnight by the OS.
+* **Environment**: Kotlin Unit Testing (JUnit), TypeScript verification (`npx tsc --noEmit`).
+
+### ❌ Initial Run (Failed)
+* **Error**: Time is accrued on subsequent days but is never deducted when tracked apps are active.
+* **Investigation**: `AccrualWorker` runs as a system-level background job (WorkManager) which reliably fires periodic ticks to allocate balance. However, the screen usage tracking service (`AppWatcherService`) runs in the main app process. If the OS kills the main app process overnight, the `ForegroundService` stops and is never restarted, making the screen tracking inactive or low priority, and preventing time deduction.
+* **Action taken**:
+  1. Modified `AccrualWorker.kt` to start the `ForegroundService` during its 15-minute background check, protected with a try-catch for background launch restrictions.
+  2. Modified `AppWatcherService.kt` to define `startForegroundServiceIfNeeded()` and call it both inside `onServiceConnected()` (when the accessibility service binds/restarts) and inside `onAccessibilityEvent()` (whenever a tracked app is focused/opened). Since Accessibility Services are explicitly exempt from background service start limitations, this ensures the foreground service is reliably self-healed.
+
+###  Retry Run (Passed)
+* **Command**: `.\gradlew test` and `npx tsc --noEmit`
+* **Result**:
+  * Kotlin unit tests successfully compiled and passed cleanly (5/5 passing).
+  * TypeScript verification checks completed with no errors.
+
 
