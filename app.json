@@ -27,8 +27,7 @@
       "permissions": [
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.RECEIVE_BOOT_COMPLETED",
-        "android.permission.POST_NOTIFICATIONS",
-        "android.permission.QUERY_ALL_PACKAGES"
+        "android.permission.POST_NOTIFICATIONS"
       ]
     },
     "plugins": [

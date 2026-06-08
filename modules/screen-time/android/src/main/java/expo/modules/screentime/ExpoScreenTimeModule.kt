@@ -170,13 +170,17 @@ class ExpoScreenTimeModule : Module() {
                     val launcherIntent = Intent(Intent.ACTION_MAIN, null).apply {
                         addCategory(Intent.CATEGORY_LAUNCHER)
                     }
-                    val launcherApps = pm.queryIntentActivities(launcherIntent, 0)
-                        .map { it.activityInfo.packageName }
-                        .toSet()
-
-                    val apps = pm.getInstalledApplications(0)
-                        .filter { it.packageName != context.packageName && launcherApps.contains(it.packageName) }
-                        .map { mapOf("name" to (pm.getApplicationLabel(it).toString()), "package" to it.packageName) }
+                    // queryIntentActivities respects our <queries> launcher declaration —
+                    // no QUERY_ALL_PACKAGES needed. loadLabel() gets the display name directly.
+                    val apps = pm.queryIntentActivities(launcherIntent, 0)
+                        .filter { it.activityInfo.packageName != context.packageName }
+                        .distinctBy { it.activityInfo.packageName }
+                        .map {
+                            mapOf(
+                                "name" to it.loadLabel(pm).toString(),
+                                "package" to it.activityInfo.packageName
+                            )
+                        }
                     promise.resolve(apps)
                 } catch (e: Exception) {
                     promise.reject("ERR_PM", e.message, e)
