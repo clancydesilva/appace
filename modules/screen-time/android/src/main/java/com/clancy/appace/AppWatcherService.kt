@@ -125,11 +125,13 @@ class AppWatcherService : AccessibilityService() {
     }
 
     private fun launchTimesUpScreen() {
-        val intent = Intent(this, Class.forName("com.clancy.appace.MainActivity")).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        val intent = packageManager.getLaunchIntentForPackage(packageName)?.apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             putExtra("route", "/timesup")
         }
-        startActivity(intent)
+        if (intent != null) {
+            startActivity(intent)
+        }
     }
 
     override fun onInterrupt() {}
