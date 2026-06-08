@@ -19,7 +19,7 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "appace_db"
-                ).fallbackToDestructiveMigration().build().also { INSTANCE = it }
+                ).fallbackToDestructiveMigrationFrom(1, 2).build().also { INSTANCE = it }
             }
 
         fun setTestInstance(instance: AppDatabase) {
