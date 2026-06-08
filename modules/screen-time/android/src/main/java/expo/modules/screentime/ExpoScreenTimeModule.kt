@@ -13,7 +13,7 @@ import expo.modules.kotlin.Promise
 import kotlinx.coroutines.*
 
 class ExpoScreenTimeModule : Module() {
-    private val context: Context get() = appContext.reactContext!!
+    private val context: Context get() = appContext.reactContext ?: error("React context not available")
     private val repo: BalanceRepository get() = BalanceRepository(context)
     private val prefs: SharedPreferences
         get() = context.getSharedPreferences("appace_prefs", Context.MODE_PRIVATE)
