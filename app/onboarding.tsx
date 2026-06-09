@@ -31,7 +31,7 @@ export default function OnboardingScreen() {
   const [accrualMinsStr, setAccrualMinsStr] = useState('5');
   const [budgetType, setBudgetType] = useState('custom');
   const [accrualIntervalStr, setAccrualIntervalStr] = useState('1');
-
+  const [accessibilityConsent, setAccessibilityConsent] = useState(false);
   const handleSelectStandard = () => {
     setBudgetType('standard');
     setStartHourStr('6');
@@ -431,9 +431,24 @@ export default function OnboardingScreen() {
           {step === 3 && (
             <View style={styles.stepContainer}>
               <Text style={styles.title}>Accessibility Permission</Text>
-              <Text style={styles.body}>
-                Appace needs accessibility permissions to identify which app is currently open. This data never leaves your device.
-              </Text>
+              <View style={styles.disclosureContainer}>
+                <Text style={styles.disclosureTitle}>Prominent Disclosure</Text>
+                <Text style={styles.disclosureText}>
+                  Appace uses the AccessibilityService API strictly to detect when you open tracked apps in order to manage your screen time budget. No window content is recorded, and no personal data is collected or transmitted.
+                </Text>
+              </View>
+
+              <TouchableOpacity 
+                style={styles.consentCheckboxRow} 
+                onPress={() => setAccessibilityConsent(!accessibilityConsent)}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.checkbox, accessibilityConsent ? styles.checkboxChecked : null]}>
+                  {accessibilityConsent && <Text style={styles.checkMark}>✓</Text>}
+                </View>
+                <Text style={styles.consentText}>I understand and agree</Text>
+              </TouchableOpacity>
+
               <Text style={styles.body}>
                 Click the button below, locate <Text style={styles.boldText}>Appace</Text> in the list, and turn it <Text style={styles.boldText}>ON</Text>.
               </Text>
@@ -446,8 +461,13 @@ export default function OnboardingScreen() {
               </View>
 
               <TouchableOpacity
-                style={styles.primaryButton}
-                onPress={() => store.openAccessibilitySettings()}
+                style={[styles.primaryButton, !accessibilityConsent && styles.primaryButtonDisabled]}
+                onPress={() => {
+                  if (accessibilityConsent) {
+                    store.openAccessibilitySettings();
+                  }
+                }}
+                disabled={!accessibilityConsent}
               >
                 <Text style={styles.primaryButtonText}>Open Settings</Text>
               </TouchableOpacity>
@@ -927,5 +947,41 @@ const styles = StyleSheet.create({
     color: '#888888',
     fontSize: 12,
     lineHeight: 16,
+  },
+  disclosureContainer: {
+    backgroundColor: '#1A1A1A',
+    borderWidth: 1,
+    borderColor: '#333333',
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 10,
+    marginBottom: 16,
+  },
+  disclosureTitle: {
+    color: '#E0E0E0',
+    fontSize: 13,
+    fontWeight: 'bold',
+    marginBottom: 6,
+  },
+  disclosureText: {
+    color: '#AAAAAA',
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  consentCheckboxRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+    paddingVertical: 4,
+  },
+  consentText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    marginLeft: 10,
+    fontWeight: '500',
+  },
+  primaryButtonDisabled: {
+    backgroundColor: '#444444',
+    opacity: 0.5,
   },
 });
