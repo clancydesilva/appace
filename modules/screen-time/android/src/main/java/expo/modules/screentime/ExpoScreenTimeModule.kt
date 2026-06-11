@@ -14,13 +14,17 @@ import kotlinx.coroutines.*
 
 class ExpoScreenTimeModule : Module() {
     private val context: Context get() = appContext.reactContext ?: error("React context not available")
-    private val repo: BalanceRepository get() = BalanceRepository(context)
+    private val repo: BalanceRepository by lazy { BalanceRepository(context) }
     private val prefs: SharedPreferences
         get() = context.getSharedPreferences("appace_prefs", Context.MODE_PRIVATE)
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     override fun definition() = ModuleDefinition {
         Name("ExpoScreenTime")
+
+        OnDestroy {
+            scope.cancel()
+        }
 
         AsyncFunction("getBalance") { promise: Promise ->
             scope.launch {
