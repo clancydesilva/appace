@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.app.PendingIntent
 import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.*
 
@@ -29,15 +30,27 @@ class ForegroundService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+        val tapIntent = packageManager.getLaunchIntentForPackage(packageName)?.apply {
+            this.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        }
+        val pendingIntent = tapIntent?.let {
+            PendingIntent.getActivity(this, 0, it, PendingIntent.FLAG_IMMUTABLE)
+        }
+
+        val notificationBuilder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Screen Time Active")
             .setContentText("Monitoring app usage")
-            .setSmallIcon(android.R.drawable.ic_menu_recent_history)
+            .setSmallIcon(applicationInfo.icon)
             .setPriority(NotificationCompat.PRIORITY_LOW)
-            .build()
+            
+        pendingIntent?.let {
+            notificationBuilder.setContentIntent(it)
+        }
+        
+        val notification = notificationBuilder.build()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(1, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+            startForeground(1, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
         } else {
             startForeground(1, notification)
         }
