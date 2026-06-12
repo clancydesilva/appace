@@ -35,32 +35,13 @@ export function DiagnosticData() {
   const telemetryStats = useMemo(() => {
     const logs = store.telemetryLogs || [];
     const ticksCount = logs.filter((l) => l.event === 'TICK').length;
-
-    // Battery Drain Rate Calculation
-    let totalDrop = 0;
-    let totalHours = 0;
-    const sorted = [...logs].sort((a, b) => a.timestamp - b.timestamp);
-
-    for (let i = 1; i < sorted.length; i++) {
-      const prev = sorted[i - 1];
-      const curr = sorted[i];
-
-      // Only calculate drain when discharging between two consecutive logs
-      if (!prev.isCharging && !curr.isCharging) {
-        const drop = prev.batteryPercent - curr.batteryPercent;
-        if (drop > 0) {
-          const timeDiffHours = (curr.timestamp - prev.timestamp) / (1000 * 60 * 60);
-          totalDrop += drop;
-          totalHours += timeDiffHours;
-        }
-      }
-    }
-
-    const averageDrain = totalHours > 0 ? (totalDrop / totalHours).toFixed(1) : '0.0';
+    const blocksCount = logs.filter((l) => l.event === 'BLOCK').length;
+    const restartsCount = logs.filter((l) => l.event === 'BOOT' || l.event === 'SERVICE_START').length;
 
     return {
       ticksCount,
-      averageDrain,
+      blocksCount,
+      restartsCount,
     };
   }, [store.telemetryLogs]);
 
@@ -131,14 +112,19 @@ export function DiagnosticData() {
             {/* Stats Dashboard Grid */}
             <View style={styles.statsGrid}>
               <View style={styles.statCard}>
-                <Text style={styles.statLabel}>AVG BATTERY DRAIN</Text>
-                <Text style={styles.statValue}>-{telemetryStats.averageDrain}%/hr</Text>
-                <Text style={styles.statSubtext}>While discharging</Text>
-              </View>
-              <View style={styles.statCard}>
-                <Text style={styles.statLabel}>ACCRUAL WORKER TICKS</Text>
+                <Text style={styles.statLabel}>ACCRUAL TICKS</Text>
                 <Text style={styles.statValue}>{telemetryStats.ticksCount}</Text>
                 <Text style={styles.statSubtext}>Logs captured</Text>
+              </View>
+              <View style={styles.statCard}>
+                <Text style={styles.statLabel}>APPS BLOCKED</Text>
+                <Text style={styles.statValue}>{telemetryStats.blocksCount}</Text>
+                <Text style={styles.statSubtext}>Total intercepted</Text>
+              </View>
+              <View style={styles.statCard}>
+                <Text style={styles.statLabel}>SVC RESTARTS</Text>
+                <Text style={styles.statValue}>{telemetryStats.restartsCount}</Text>
+                <Text style={styles.statSubtext}>Boot/Init events</Text>
               </View>
             </View>
 
@@ -283,23 +269,23 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   statCard: {
-    flex: 0.48,
+    flex: 0.31,
     backgroundColor: Colors.cardBg,
     borderWidth: 1,
     borderColor: Colors.border,
     borderRadius: 8,
-    padding: 16,
+    padding: 12,
     alignItems: 'center',
   },
   statLabel: {
     color: Colors.textSecondary,
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: 'bold',
     marginBottom: 8,
   },
   statValue: {
     color: Colors.textPrimary,
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: '900',
   },
   statSubtext: {
