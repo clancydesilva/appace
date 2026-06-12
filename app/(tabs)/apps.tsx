@@ -30,6 +30,7 @@ export default function AppsScreen() {
           return state.setTrackedApps(cleaned);
         }
       })
+      .catch(console.warn)
       .finally(() => setLoading(false));
   }, []);
 
@@ -94,7 +95,7 @@ export default function AppsScreen() {
                   <Switch
                     trackColor={{ false: '#222', true: '#FFFFFF' }}
                     thumbColor={isTracked ? '#000000' : '#444444'}
-                    ios_backgroundColor="#222"
+
                     onValueChange={(val) => handleToggleApp(item.package, val)}
                     value={isTracked}
                   />
@@ -123,7 +124,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingHorizontal: 24,
-    paddingTop: Platform.OS === 'android' ? 20 : 10,
+    paddingTop: 20,
   },
   header: {
     marginBottom: 20,

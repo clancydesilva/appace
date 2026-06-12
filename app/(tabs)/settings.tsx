@@ -119,26 +119,6 @@ export default function SettingsScreen() {
     return opening + (drops * accrual);
   }, [startHourStr, endHourStr, openingMinsStr, accrualMinsStr, accrualIntervalStr]);
 
-  // Sync inputs with local state
-  const handleUpdateStartHour = (text: string) => {
-    setStartHourStr(text);
-  };
-
-  const handleUpdateEndHour = (text: string) => {
-    setEndHourStr(text);
-  };
-
-  const handleUpdateOpening = (text: string) => {
-    setOpeningMinsStr(text);
-  };
-
-  const handleUpdateAccrual = (text: string) => {
-    setAccrualMinsStr(text);
-  };
-
-  const handleUpdateAccrualInterval = (text: string) => {
-    setAccrualIntervalStr(text);
-  };
 
   const handleSelectStandard = () => {
     setSelectedPreset('standard');
@@ -258,7 +238,6 @@ export default function SettingsScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.keyboardAvoid}
       >
         <ScrollView
@@ -382,7 +361,7 @@ export default function SettingsScreen() {
                           style={styles.textInput}
                           keyboardType="numeric"
                           value={startHourStr}
-                          onChangeText={handleUpdateStartHour}
+                          onChangeText={setStartHourStr}
                           placeholder="6"
                           placeholderTextColor="#444"
                         />
@@ -397,7 +376,7 @@ export default function SettingsScreen() {
                           style={styles.textInput}
                           keyboardType="numeric"
                           value={endHourStr}
-                          onChangeText={handleUpdateEndHour}
+                          onChangeText={setEndHourStr}
                           placeholder="24"
                           placeholderTextColor="#444"
                         />
@@ -414,7 +393,7 @@ export default function SettingsScreen() {
                           style={styles.textInput}
                           keyboardType="numeric"
                           value={openingMinsStr}
-                          onChangeText={handleUpdateOpening}
+                          onChangeText={setOpeningMinsStr}
                           placeholder="5"
                           placeholderTextColor="#444"
                         />
@@ -426,7 +405,7 @@ export default function SettingsScreen() {
                           style={styles.textInput}
                           keyboardType="numeric"
                           value={accrualMinsStr}
-                          onChangeText={handleUpdateAccrual}
+                          onChangeText={setAccrualMinsStr}
                           placeholder="5"
                           placeholderTextColor="#444"
                         />
@@ -440,7 +419,7 @@ export default function SettingsScreen() {
                           style={styles.textInput}
                           keyboardType="numeric"
                           value={accrualIntervalStr}
-                          onChangeText={handleUpdateAccrualInterval}
+                          onChangeText={setAccrualIntervalStr}
                           placeholder="1"
                           placeholderTextColor="#444"
                         />
@@ -671,7 +650,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 24,
-    paddingTop: Platform.OS === 'android' ? 20 : 10,
+    paddingTop: 20,
     paddingBottom: 40,
   },
   header: {
@@ -915,7 +894,7 @@ const styles = StyleSheet.create({
   modalContainer: {
     flex: 1,
     backgroundColor: '#0D0D0D',
-    paddingTop: Platform.OS === 'android' ? 20 : 0,
+    paddingTop: 20,
   },
   modalHeader: {
     flexDirection: 'row',

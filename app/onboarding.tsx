@@ -178,7 +178,6 @@ export default function OnboardingScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.keyboardAvoid}
       >
         <View style={styles.header}>
@@ -905,21 +904,6 @@ const styles = StyleSheet.create({
   },
   presetTabTextActive: {
     color: '#000000',
-    fontWeight: 'bold',
-  },
-  presetTabTextDisabled: {
-    color: '#555555',
-  },
-  soonBadge: {
-    backgroundColor: '#E74C3C',
-    borderRadius: 4,
-    paddingHorizontal: 5,
-    paddingVertical: 2,
-    marginLeft: 4,
-  },
-  soonBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 8,
     fontWeight: 'bold',
   },
   presetDescPanel: {

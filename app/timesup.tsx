@@ -17,15 +17,15 @@ export default function TimesUpScreen() {
   });
 
   useEffect(() => {
-    store.fetchSettings();
-    store.checkWindow();
+    store.fetchSettings().catch(console.warn);
+    store.checkWindow().catch(console.warn);
 
     // Check balance status on mount & update countdown
     timer.current = setInterval(() => {
       const now = new Date();
       setMinutesUntilNextDrop(60 - now.getMinutes());
-      store.checkWindow();
-      store.fetchBalance();
+      store.checkWindow().catch(console.warn);
+      store.fetchBalance().catch(console.warn);
     }, 1000);
 
     return () => {

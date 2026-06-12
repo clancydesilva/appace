@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTimerStore } from '../../store/useTimerStore';
+
 import { calculateMaxDailyMinutes } from '../../utils/budget';
 import { formatHourLabel } from '../../utils/formatTime';
 
@@ -27,14 +28,14 @@ export default function HomeScreen() {
   // Core initialization & listeners
   useEffect(() => {
     // 1. Initial fetches
-    refreshState();
+    refreshState().catch(console.warn);
 
     // 2. Setup 30-second refetch interval for database sync
     balanceTimer.current = setInterval(() => {
-      store.fetchBalance();
-      store.checkWindow();
-      store.checkAccessibility();
-      store.checkBatteryOptimization();
+      store.fetchBalance().catch(console.warn);
+      store.checkWindow().catch(console.warn);
+      store.checkAccessibility().catch(console.warn);
+      store.checkBatteryOptimization().catch(console.warn);
     }, 30000);
 
     // 3. Setup 1-second clock timer to update progress bar and countdowns
@@ -47,7 +48,7 @@ export default function HomeScreen() {
     // 4. AppState listener for active foreground detection (checks permissions immediately when user returns)
     const handleAppStateChange = (nextStatus: AppStateStatus) => {
       if (nextStatus === 'active') {
-        refreshState();
+        refreshState().catch(console.warn);
       }
     };
     const sub = AppState.addEventListener('change', handleAppStateChange);
@@ -73,12 +74,7 @@ export default function HomeScreen() {
     await store.checkBatteryOptimization();
   };
 
-  // Helper formatting for 12-hour labels
-  const formatHourLabel = (h: number) => {
-    if (h === 0 || h === 24) return '12:00am';
-    if (h === 12) return '12:00pm';
-    return h > 12 ? `${h - 12}:00pm` : `${h}:00am`;
-  };
+
 
   // Format balance (seconds) to MM:SS (e.g. 75m 30s -> 75:30)
   const formatBalance = (totalSeconds: number) => {
@@ -176,7 +172,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 24,
     justifyContent: 'space-between',
-    paddingTop: Platform.OS === 'android' ? 20 : 10,
+    paddingTop: 20,
     paddingBottom: 40,
   },
   warningBanner: {
