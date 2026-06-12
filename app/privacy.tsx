@@ -1,34 +1,13 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ActivityIndicator, ScrollView, TouchableOpacity, Platform } from 'react-native';
+import React from 'react';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import Markdown from 'react-native-markdown-display';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/theme';
-
-const PRIVACY_POLICY_URL = 'https://raw.githubusercontent.com/clancydesilva/appace/main/privacy_policy.md';
+import { PRIVACY_POLICY_MD } from '../constants/PrivacyPolicy';
 
 export default function PrivacyScreen() {
   const router = useRouter();
-  const [content, setContent] = useState<string>('');
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetch(PRIVACY_POLICY_URL)
-      .then((res) => {
-        if (!res.ok) throw new Error('Failed to fetch policy.');
-        return res.text();
-      })
-      .then((text) => {
-        setContent(text);
-        setLoading(false);
-      })
-      .catch((err) => {
-        console.warn('Privacy Policy Fetch Error:', err);
-        setError('Could not load privacy policy. Please check your internet connection or read it on our website.');
-        setLoading(false);
-      });
-  }, []);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -41,33 +20,11 @@ export default function PrivacyScreen() {
       </View>
 
       <View style={styles.contentContainer}>
-        {loading ? (
-          <View style={styles.center}>
-            <ActivityIndicator size="large" color={Colors.textPrimary} />
-            <Text style={styles.loadingText}>Loading policy...</Text>
-          </View>
-        ) : error ? (
-          <View style={styles.center}>
-            <Ionicons name="alert-circle-outline" size={48} color={Colors.error} />
-            <Text style={styles.errorText}>{error}</Text>
-            <TouchableOpacity style={styles.retryButton} onPress={() => {
-              setLoading(true);
-              setError(null);
-              fetch(PRIVACY_POLICY_URL)
-                .then(r => r.text())
-                .then(t => { setContent(t); setLoading(false); })
-                .catch(e => { setError('Failed again.'); setLoading(false); });
-            }}>
-              <Text style={styles.retryText}>Retry</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-            <Markdown style={markdownStyles}>
-              {content}
-            </Markdown>
-          </ScrollView>
-        )}
+        <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+          <Markdown style={markdownStyles}>
+            {PRIVACY_POLICY_MD}
+          </Markdown>
+        </ScrollView>
       </View>
     </SafeAreaView>
   );
