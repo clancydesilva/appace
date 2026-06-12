@@ -60,7 +60,7 @@ export default function SettingsScreen() {
 
           <PermissionsStatus />
 
-          <DiagnosticData />
+          {__DEV__ && <DiagnosticData />}
         </ScrollView>
       </KeyboardAvoidingView>
 
