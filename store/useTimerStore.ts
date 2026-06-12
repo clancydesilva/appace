@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import ScreenTime, { AppaceSettings, InstalledApp, TelemetryLog } from '../modules/screen-time';
+import { BudgetType } from '../constants/defaults';
 
 interface TimerStore {
   balanceSeconds: number;
@@ -7,7 +8,7 @@ interface TimerStore {
   windowEndHour: number;
   openingBalanceMinutes: number;
   hourlyAccrualMinutes: number;
-  budgetType: string;
+  budgetType: BudgetType;
   accrualIntervalHours: number;
   trackedApps: string[];
   installedApps: InstalledApp[];
@@ -29,18 +30,15 @@ interface TimerStore {
   setWindowHours: (start: number, end: number) => Promise<void>;
   setOpeningBalance: (mins: number) => Promise<void>;
   setHourlyAccrual: (mins: number) => Promise<void>;
-  setBudgetType: (type: string) => Promise<void>;
+  setBudgetType: (type: BudgetType) => Promise<void>;
   setAccrualInterval: (hours: number) => Promise<void>;
   setTrackedApps: (pkgs: string[]) => Promise<void>;
-  saveSettings: (start: number, end: number, opening: number, accrual: number, type: string, interval: number) => Promise<void>;
+  saveSettings: (start: number, end: number, opening: number, accrual: number, type: BudgetType, interval: number) => Promise<void>;
   openAccessibilitySettings: () => Promise<void>;
   openBatteryOptimizationSettings: () => Promise<void>;
   startService: () => Promise<void>;
   fetchTelemetryLogs: () => Promise<void>;
   clearTelemetryLogs: () => Promise<void>;
-
-  maxDailyMinutes: () => number;
-  minutesUntilNextDrop: () => number;
 }
 
 export const useTimerStore = create<TimerStore>((set, get) => ({
@@ -78,7 +76,7 @@ export const useTimerStore = create<TimerStore>((set, get) => ({
       windowEndHour: s.windowEndHour,
       openingBalanceMinutes: s.openingBalanceMinutes,
       hourlyAccrualMinutes: s.hourlyAccrualMinutes,
-      budgetType: s.budgetType || 'custom',
+      budgetType: (s.budgetType as BudgetType) || 'custom',
       accrualIntervalHours: s.accrualIntervalHours || 1,
     });
   },
@@ -131,34 +129,5 @@ export const useTimerStore = create<TimerStore>((set, get) => ({
   clearTelemetryLogs: async () => {
     await ScreenTime.clearTelemetryLogs();
     set({ telemetryLogs: [] });
-  },
-
-  maxDailyMinutes: () => {
-    const { windowStartHour, windowEndHour, openingBalanceMinutes, hourlyAccrualMinutes, accrualIntervalHours } = get();
-    let drops = 0;
-    for (let hr = windowStartHour + 1; hr < windowEndHour; hr++) {
-      if ((hr - windowStartHour) % accrualIntervalHours === 0) {
-        drops++;
-      }
-    }
-    return openingBalanceMinutes + (drops * hourlyAccrualMinutes);
-  },
-
-  minutesUntilNextDrop: () => {
-    const { windowStartHour, accrualIntervalHours } = get();
-    const now = new Date();
-    const currentHour = now.getHours();
-    
-    // Find hours since start to figure out when the next interval boundary is
-    const hoursSinceStart = currentHour - windowStartHour;
-    if (hoursSinceStart < 0) {
-      // If we are before windowStartHour, the next drop is at windowStartHour
-      // which is opening balance.
-      return 0; // Handled by standard screen logic
-    }
-    
-    const remainingHoursInInterval = accrualIntervalHours - (hoursSinceStart % accrualIntervalHours);
-    const minsToNextHour = 60 - now.getMinutes();
-    return ((remainingHoursInInterval - 1) * 60) + minsToNextHour;
   },
 }));

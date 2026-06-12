@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, Platform } from 'react-native';
 import { usePreventRemove } from '@react-navigation/native';
 import { useTimerStore } from '../store/useTimerStore';
+import { formatHourLabel } from '../utils/formatTime';
 
 export default function TimesUpScreen() {
   const store = useTimerStore();
@@ -32,12 +33,7 @@ export default function TimesUpScreen() {
     };
   }, []);
 
-  // Helper formatting for 12-hour labels
-  const formatHourLabel = (h: number) => {
-    if (h === 0 || h === 24) return '12:00am';
-    if (h === 12) return '12:00pm';
-    return h > 12 ? `${h - 12}:00pm` : `${h}:00am`;
-  };
+
 
   const getSubtext = () => {
     if (store.isWithinWindow) {

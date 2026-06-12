@@ -14,6 +14,9 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTimerStore } from '../store/useTimerStore';
+import { calculateMaxDailyMinutes } from '../utils/budget';
+import { formatHourLabel } from '../utils/formatTime';
+import { BudgetType } from '../constants/defaults';
 import { InstalledApp } from '../modules/screen-time';
 
 export default function OnboardingScreen() {
@@ -106,7 +109,7 @@ export default function OnboardingScreen() {
     const accrual = Math.max(1, Math.min(60, parseInt(accrualMinsStr) || 5));
     const interval = Math.max(1, Math.min(24, parseInt(accrualIntervalStr) || 1));
 
-    await store.setBudgetType(budgetType);
+    await store.setBudgetType(budgetType as BudgetType);
     await store.setWindowHours(start, end);
     await store.setOpeningBalance(opening);
     await store.setHourlyAccrual(accrual);
@@ -121,23 +124,13 @@ export default function OnboardingScreen() {
   const previewOpening = Math.max(1, Math.min(60, parseInt(openingMinsStr) || 5));
   const previewAccrual = Math.max(1, Math.min(60, parseInt(accrualMinsStr) || 5));
 
-  const formatHourLabel = (h: number) => {
-    if (h === 0 || h === 24) return '12am (Midnight)';
-    if (h === 12) return '12pm (Noon)';
-    return h > 12 ? `${h - 12}pm` : `${h}am`;
-  };
-
-  const previewMaxMinutes = (() => {
-    const hours = previewEnd - previewStart;
-    const interval = Math.max(1, parseInt(accrualIntervalStr) || 1);
-    let drops = 0;
-    for (let hr = previewStart + 1; hr < previewEnd; hr++) {
-      if ((hr - previewStart) % interval === 0) {
-        drops++;
-      }
-    }
-    return previewOpening + (drops * previewAccrual);
-  })();
+  const previewMaxMinutes = calculateMaxDailyMinutes(
+    previewStart,
+    previewEnd,
+    previewOpening,
+    previewAccrual,
+    Math.max(1, parseInt(accrualIntervalStr) || 1)
+  );
 
   // Toggle app tracking state
   const handleToggleApp = async (pkg: string) => {

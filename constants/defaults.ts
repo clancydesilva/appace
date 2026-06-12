@@ -4,6 +4,8 @@ export const DEFAULT_OPENING_BALANCE_MINUTES = 5;
 export const DEFAULT_HOURLY_ACCRUAL_MINUTES = 5;
 export const DEFAULT_TRACKED_APPS: string[] = [];
 
+export type BudgetType = 'standard' | 'compounding' | 'custom';
+
 // Daily accrual breakdown (defaults):
 // 6:00am  → +5 mins (opening balance — replaces the first hourly drop)
 // 7:00am  → +5 mins (silent)

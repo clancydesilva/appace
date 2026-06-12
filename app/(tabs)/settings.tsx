@@ -14,6 +14,9 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useTimerStore } from '../../store/useTimerStore';
+import { calculateMaxDailyMinutes } from '../../utils/budget';
+import { formatHourLabel } from '../../utils/formatTime';
+import { BudgetType } from '../../constants/defaults';
 
 export default function SettingsScreen() {
   const store = useTimerStore();
@@ -187,15 +190,14 @@ export default function SettingsScreen() {
     }
   };
 
-  // Helper formatting for 12-hour labels
-  const formatHourLabel = (h: number) => {
-    if (h === 0 || h === 24) return '12:00am (Midnight)';
-    if (h === 12) return '12:00pm (Noon)';
-    return h > 12 ? `${h - 12}:00pm` : `${h}:00am`;
-  };
-
   // Compute live values derived from store state
-  const computedMaxDaily = store.maxDailyMinutes();
+  const computedMaxDaily = calculateMaxDailyMinutes(
+    store.windowStartHour, 
+    store.windowEndHour, 
+    store.openingBalanceMinutes, 
+    store.hourlyAccrualMinutes, 
+    store.accrualIntervalHours
+  );
 
   // Telemetry Calculations
   const telemetryStats = useMemo(() => {

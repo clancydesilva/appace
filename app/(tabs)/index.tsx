@@ -11,6 +11,8 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTimerStore } from '../../store/useTimerStore';
+import { calculateMaxDailyMinutes } from '../../utils/budget';
+import { formatHourLabel } from '../../utils/formatTime';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -93,7 +95,13 @@ export default function HomeScreen() {
     return `Window opens at ${formatHourLabel(store.windowStartHour)}`;
   };
 
-  const computedMaxDaily = store.maxDailyMinutes();
+  const computedMaxDaily = calculateMaxDailyMinutes(
+    store.windowStartHour, 
+    store.windowEndHour, 
+    store.openingBalanceMinutes, 
+    store.hourlyAccrualMinutes, 
+    store.accrualIntervalHours
+  );
 
   return (
     <SafeAreaView style={styles.safeArea}>
