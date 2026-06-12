@@ -9,6 +9,7 @@ export default function RootLayout() {
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="timesup" options={{ presentation: 'fullScreenModal' }} />
+        <Stack.Screen name="privacy" options={{ presentation: 'fullScreenModal' }} />
         <Stack.Screen name="onboarding" />
       </Stack>
     </ErrorBoundary>

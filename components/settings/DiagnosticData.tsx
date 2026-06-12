@@ -2,9 +2,11 @@ import React, { useState, useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal, SafeAreaView, ActivityIndicator, FlatList } from 'react-native';
 import { useTimerStore } from '../../store/useTimerStore';
 import { Colors } from '../../constants/theme';
+import { useRouter } from 'expo-router';
 
 export function DiagnosticData() {
   const store = useTimerStore();
+  const router = useRouter();
 
   const [diagnosticsVisible, setDiagnosticsVisible] = useState(false);
   const [loadingTelemetry, setLoadingTelemetry] = useState(false);
@@ -91,6 +93,19 @@ export function DiagnosticData() {
             onPress={handleOpenDiagnostics}
           >
             <Text style={[styles.listItemButtonText, { color: Colors.textPrimary }]}>View</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={[styles.listItem, { borderTopWidth: 1, borderColor: Colors.border }]}>
+          <View style={styles.listItemTextContainer}>
+            <Text style={styles.listItemTitle}>Privacy Policy</Text>
+            <Text style={styles.listItemValue}>Read data handling and privacy terms</Text>
+          </View>
+          <TouchableOpacity
+            style={[styles.listItemButton, { backgroundColor: Colors.border }]}
+            onPress={() => router.push('/privacy' as any)}
+          >
+            <Text style={[styles.listItemButtonText, { color: Colors.textPrimary }]}>Read</Text>
           </TouchableOpacity>
         </View>
       </View>

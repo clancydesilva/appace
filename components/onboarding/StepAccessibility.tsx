@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
+import { useRouter } from 'expo-router';
 import { styles } from './styles';
 import { useTimerStore } from '../../store/useTimerStore';
 
 export function StepAccessibility() {
+  const router = useRouter();
   const store = useTimerStore();
   const [accessibilityConsent, setAccessibilityConsent] = useState(false);
 
@@ -26,6 +28,10 @@ export function StepAccessibility() {
           {accessibilityConsent && <Text style={styles.checkMark}>✓</Text>}
         </View>
         <Text style={styles.consentText}>I understand and agree</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity onPress={() => router.push('/privacy' as any)} style={{ marginBottom: 24, marginTop: -12 }}>
+        <Text style={{ color: '#3498db', fontSize: 14, fontWeight: 'bold' }}>Read Privacy Policy</Text>
       </TouchableOpacity>
 
       <Text style={styles.body}>
