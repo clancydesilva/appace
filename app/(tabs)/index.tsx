@@ -36,7 +36,7 @@ export default function HomeScreen() {
       store.checkWindow().catch(console.warn);
       store.checkAccessibility().catch(console.warn);
       store.checkBatteryOptimization().catch(console.warn);
-    }, 30000);
+    }, 10000);
 
     // 3. Setup 1-second clock timer to update progress bar and countdowns
     clockTimer.current = setInterval(() => {

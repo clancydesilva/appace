@@ -251,4 +251,23 @@ Use this file to log every test run, errors encountered, changes made, and verif
   * Kotlin unit tests successfully compiled and passed cleanly (5/5 passing).
   * TypeScript verification checks completed with no errors.
 
+---
 
+## [2026-07-05 16:45] Timer Accuracy Fix — AppWatcherService Elapsed Time
+
+* **Test Goal**: Fix two user-reported bugs: (1) timer counts down 1.35x slower than real time, (2) sometimes tracked app usage is not detected / timer doesn't count down.
+* **Environment**: Android Emulator (`Pixel_6_API_34i`), Expo SDK 54, branch `phase6/timer-accuracy-fix`.
+
+### Root Cause Analysis
+* **Bug 1 (1.35x slowdown)**: `AppWatcherService` active tracking loop used `delay(5000)` followed by `repo.deductSeconds(5L)` — deducting a fixed 5 seconds. But each loop iteration actually took ~6.75s due to coroutine re-scheduling overhead + Room DB I/O. Ratio: 6.75/5 = 1.35x, matching the user's measurement exactly.
+* **Bug 2 (missed detections)**: Time segments were lost between fixed deductions, and a race condition existed when switching between two tracked apps (old coroutine could deduct before cancellation, then new coroutine would also deduct the full elapsed time).
+
+### Changes Made
+1. **`AppWatcherService.kt`**: Replaced fixed `repo.deductSeconds(5L)` with elapsed wall-clock time measurement using `SystemClock.elapsedRealtime()` (monotonic clock). Added `deductElapsedTime()` helper. Added DEDUCT telemetry logging for all deduction events.
+2. **`app/(tabs)/index.tsx`**: Increased UI balance polling interval from 30s to 10s for more responsive timer display.
+
+### ✅ Test Run (Passed)
+* **Kotlin tests**: `.\gradlew.bat test` — BUILD SUCCESSFUL, all 5 BalanceRepository tests passing.
+* **JS tests**: No JS test script configured (no JS-side tests exist).
+* **Build**: `npx expo run:android` — BUILD SUCCESSFUL in 7m 48s, deployed to emulator.
+* **Emulator**: App launched and running on Pixel_6_API_34i, Metro bundled 1292 modules.
