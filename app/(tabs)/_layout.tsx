@@ -40,6 +40,16 @@ export default function TabLayout() {
           ),
         }}
       />
+      <Tabs.Screen
+        name="dev"
+        options={{
+          title: 'Dev Tools',
+          href: __DEV__ ? undefined : null,
+          tabBarIcon: ({ color }) => (
+            <Ionicons name="construct-outline" size={22} color={color} />
+          ),
+        }}
+      />
     </Tabs>
   );
 }

@@ -52,6 +52,11 @@ class BalanceRepository(private val context: Context) {
         dao.upsert(b.copy(balanceSeconds = maxOf(0, b.balanceSeconds - seconds)))
     }
 
+    fun setBalanceSeconds(seconds: Long) {
+        val b = getBalance()
+        dao.upsert(b.copy(balanceSeconds = maxOf(0, seconds)))
+    }
+
     fun setWindowHours(start: Int, end: Int) {
         dao.upsert(getBalance().copy(windowStartHour = start, windowEndHour = end))
     }

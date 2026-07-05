@@ -120,6 +120,15 @@ class BalanceRepositoryTest {
     }
 
     @Test
+    fun testSetBalanceSeconds() {
+        repo.setBalanceSeconds(500L)
+        assertEquals(500L, repo.getBalance().balanceSeconds)
+
+        repo.setBalanceSeconds(-10L)
+        assertEquals(0L, repo.getBalance().balanceSeconds)
+    }
+
+    @Test
     fun testTickDoesNothingOutsideWindow() {
         val testDay = LocalDate.of(2026, 6, 5)
 

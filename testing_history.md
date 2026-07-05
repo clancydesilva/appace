@@ -271,3 +271,24 @@ Use this file to log every test run, errors encountered, changes made, and verif
 * **JS tests**: No JS test script configured (no JS-side tests exist).
 * **Build**: `npx expo run:android` — BUILD SUCCESSFUL in 7m 48s, deployed to emulator.
 * **Emulator**: App launched and running on Pixel_6_API_34i, Metro bundled 1292 modules.
+
+---
+
+## [2026-07-05 17:35] Dev Tools Dashboard Implementation
+
+* **Test Goal**: Add a dev tools dashboard allowing dynamic simulation (setting balance, mock clock override, force tick).
+* **Environment**: Android Emulator (`Pixel_6_API_34i`), Expo SDK 54, branch `dev`.
+
+### Changes Made
+1. **`BalanceRepository.kt`**: Added `setBalanceSeconds(seconds: Long)` method to allow directly setting balance.
+2. **`ExpoScreenTimeModule.kt`**: Added new `AsyncFunction` wrappers for `setBalanceSeconds`, `setTestClock`, `clearTestClock`, and `forceTick`.
+3. **`ExpoScreenTimeModule.ts`**: Declared new method signatures for dev tools APIs.
+4. **`useTimerStore.ts`**: Declared and implemented store actions to call native methods and refresh state.
+5. **`app/(tabs)/_layout.tsx`**: Registered new tab `dev` with `href: __DEV__ ? undefined : null` to render in dev mode only.
+6. **`app/(tabs)/dev.tsx`**: Created a beautiful, fully functional developer panel with presets for balance (0s, 10s, 60s, 5m), clock presets (10:59, 23:59, 5:59), custom clock override input, live state diagnostics, force tick actions, and tracked apps list.
+7. **`BalanceRepositoryTest.kt`**: Added `testSetBalanceSeconds` unit test case.
+
+### ✅ Test Run (Passed)
+* **Kotlin tests**: `.\gradlew.bat test` — BUILD SUCCESSFUL, all 6 BalanceRepository tests passing (including the new set balance test).
+* **Build/Metro**: App successfully builds and bundles on dev branch.
+

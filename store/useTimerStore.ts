@@ -39,6 +39,10 @@ interface TimerStore {
   startService: () => Promise<void>;
   fetchTelemetryLogs: () => Promise<void>;
   clearTelemetryLogs: () => Promise<void>;
+  setBalanceSeconds: (seconds: number) => Promise<void>;
+  setTestClock: (isoString: string) => Promise<void>;
+  clearTestClock: () => Promise<void>;
+  forceTick: () => Promise<void>;
 }
 
 export const useTimerStore = create<TimerStore>((set, get) => ({
@@ -129,5 +133,21 @@ export const useTimerStore = create<TimerStore>((set, get) => ({
   clearTelemetryLogs: async () => {
     await ScreenTime.clearTelemetryLogs();
     set({ telemetryLogs: [] });
+  },
+  setBalanceSeconds: async (seconds) => {
+    await ScreenTime.setBalanceSeconds(seconds);
+    set({ balanceSeconds: seconds });
+  },
+  setTestClock: async (isoString) => {
+    await ScreenTime.setTestClock(isoString);
+    await get().fetchBalance();
+  },
+  clearTestClock: async () => {
+    await ScreenTime.clearTestClock();
+    await get().fetchBalance();
+  },
+  forceTick: async () => {
+    await ScreenTime.forceTick();
+    await get().fetchBalance();
   },
 }));

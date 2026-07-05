@@ -257,5 +257,49 @@ class ExpoScreenTimeModule : Module() {
                 }
             }
         }
+
+        AsyncFunction("setBalanceSeconds") { seconds: Int, promise: Promise ->
+            scope.launch {
+                try {
+                    repo.setBalanceSeconds(seconds.toLong())
+                    promise.resolve(null)
+                } catch (e: Exception) {
+                    promise.reject("ERR_DB", e.message, e)
+                }
+            }
+        }
+
+        AsyncFunction("setTestClock") { isoString: String, promise: Promise ->
+            scope.launch {
+                try {
+                    BalanceRepository.testDateTime = java.time.LocalDateTime.parse(isoString)
+                    promise.resolve(null)
+                } catch (e: Exception) {
+                    promise.reject("ERR_PARSING", e.message, e)
+                }
+            }
+        }
+
+        AsyncFunction("clearTestClock") { promise: Promise ->
+            scope.launch {
+                try {
+                    BalanceRepository.testDateTime = null
+                    promise.resolve(null)
+                } catch (e: Exception) {
+                    promise.reject("ERR_CLOCK", e.message, e)
+                }
+            }
+        }
+
+        AsyncFunction("forceTick") { promise: Promise ->
+            scope.launch {
+                try {
+                    repo.tick()
+                    promise.resolve(null)
+                } catch (e: Exception) {
+                    promise.reject("ERR_TICK", e.message, e)
+                }
+            }
+        }
     }
 }
