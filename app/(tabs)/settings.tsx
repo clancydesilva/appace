@@ -13,14 +13,15 @@ import {
   FlatList,
   ActivityIndicator,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useTimerStore } from '../../store/useTimerStore';
 import { PermissionsStatus } from '../../components/settings/PermissionsStatus';
-import { DiagnosticData } from '../../components/settings/DiagnosticData';
 import { BudgetSettings } from '../../components/settings/BudgetSettings';
 import ScreenTime from '../../modules/screen-time';
 
 export default function SettingsScreen() {
   const store = useTimerStore();
+  const router = useRouter();
 
   const statusTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -61,7 +62,21 @@ export default function SettingsScreen() {
 
           <PermissionsStatus />
 
-          {(__DEV__ || ScreenTime.isDebug) && <DiagnosticData />}
+          <Text style={styles.groupHeader}>Information & Privacy</Text>
+          <View style={styles.listGroup}>
+            <View style={styles.listItem}>
+              <View style={styles.listItemTextContainer}>
+                <Text style={styles.listItemTitle}>Privacy Policy</Text>
+                <Text style={styles.listItemValue}>Read data handling and privacy terms</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.statusButton}
+                onPress={() => router.push('/privacy' as any)}
+              >
+                <Text style={styles.statusButtonText}>Read</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -323,178 +338,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '800',
     textTransform: 'uppercase',
-  },
-  modalContainer: {
-    flex: 1,
-    backgroundColor: '#0D0D0D',
-    paddingTop: 20,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderColor: '#1C1C1C',
-  },
-  modalTitle: {
-    color: '#FFFFFF',
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  modalCloseButton: {
-    backgroundColor: '#1C1C1C',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
-  modalCloseButtonText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  modalContent: {
-    flex: 1,
-    paddingHorizontal: 24,
-    paddingTop: 16,
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 20,
-  },
-  statCard: {
-    flex: 0.48,
-    backgroundColor: '#141414',
-    borderWidth: 1,
-    borderColor: '#1C1C1C',
-    borderRadius: 10,
-    padding: 16,
-    alignItems: 'center',
-  },
-  statLabel: {
-    color: '#888888',
-    fontSize: 9,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-    marginBottom: 6,
-  },
-  statValue: {
-    color: '#FFFFFF',
-    fontSize: 22,
-    fontWeight: 'bold',
-  },
-  statSubtext: {
-    color: '#444444',
-    fontSize: 9,
-    marginTop: 4,
-  },
-  logSectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-    borderBottomWidth: 1,
-    borderColor: '#1C1C1C',
-    paddingBottom: 8,
-  },
-  logSectionTitle: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  clearLogsText: {
-    color: '#E74C3C',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  loaderContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loaderText: {
-    color: '#555555',
-    fontSize: 12,
-    marginTop: 12,
-  },
-  modalListContent: {
-    paddingBottom: 30,
-  },
-  logRow: {
-    backgroundColor: '#141414',
-    borderWidth: 1,
-    borderColor: '#1C1C1C',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 8,
-  },
-  logMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  eventBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    borderRadius: 4,
-    marginRight: 8,
-  },
-  eventBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 8,
-    fontWeight: '800',
-  },
-  logBattery: {
-    color: '#888888',
-    fontSize: 10,
-    fontWeight: '600',
-    marginRight: 8,
-  },
-  logTime: {
-    color: '#444444',
-    fontSize: 10,
-    flex: 1,
-    textAlign: 'right',
-  },
-  logDetails: {
-    color: '#CCCCCC',
-    fontSize: 12,
-    lineHeight: 16,
-  },
-  emptyLogsContainer: {
-    paddingVertical: 60,
-    alignItems: 'center',
-  },
-  emptyLogsText: {
-    color: '#888888',
-    fontSize: 14,
-    fontWeight: 'bold',
-    marginBottom: 6,
-  },
-  emptyLogsSub: {
-    color: '#555555',
-    fontSize: 11,
-    textAlign: 'center',
-    lineHeight: 15,
-  },
-  presetTabDisabled: {
-    backgroundColor: '#141414',
-    opacity: 0.4,
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    borderRadius: 6,
-  },
-  presetTabTextDisabled: {
-    color: '#555555',
-    fontSize: 13,
-    fontWeight: '600',
-    textDecorationLine: 'line-through',
   },
   confirmButton: {
     backgroundColor: '#FFFFFF',
