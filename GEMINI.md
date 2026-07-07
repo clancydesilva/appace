@@ -27,6 +27,7 @@ Every test run and debug cycle must be tracked to maintain a clean history of is
 
 ## Git — Required on Every Commit
 
+- Always read and follow the Git branching, testing, and cherry-picking instructions in [git_workflow.md](file:///c:/Users/clanc/Desktop/College/appace/git_workflow.md) before merging, cherry-picking, or performing git operations.
 - Always work on a feature branch, never commit directly to `main`.
 - Branch naming: `phase/description` (e.g. `phase1/expo-scaffold`, `phase3/room-db`, `phase3/workmanager`)
 - Run all available tests before every commit. Do not commit if tests fail.
