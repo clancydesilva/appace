@@ -102,6 +102,9 @@ class AppWatcherService : AccessibilityService() {
                         lastDeductionTime = now
                     }
 
+                    val balance = repo.getBalance().balanceSeconds
+                    TelemetryLogger.log(applicationContext, "SCREEN_TICK", "Tracked app: $pkg, Balance: ${balance}s")
+
                     if (!repo.hasTimeRemaining() && repo.isWithinWindow()) {
                         TelemetryLogger.log(applicationContext, "BLOCK", "Active limit hit inside $pkg (0s remaining)")
                         launchTimesUpScreen()
