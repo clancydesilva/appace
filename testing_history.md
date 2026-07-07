@@ -271,3 +271,22 @@ Use this file to log every test run, errors encountered, changes made, and verif
 * **JS tests**: No JS test script configured (no JS-side tests exist).
 * **Build**: `npx expo run:android` — BUILD SUCCESSFUL in 7m 48s, deployed to emulator.
 * **Emulator**: App launched and running on Pixel_6_API_34i, Metro bundled 1292 modules.
+
+---
+
+## [2026-07-07 08:40] Standalone Dev/Debug APK Packaging (v0.0.6)
+
+* **Test Goal**: Build a standalone debug APK containing packaged JS assets to run offline on physical devices.
+* **Environment**: Physical Samsung Galaxy S24 (`R3CX908LHVM`), Expo SDK 54, branch `dev`.
+
+### ❌ Initial Run (Failed)
+* **Error**: Crash on launch with `java.lang.RuntimeException: Unable to load script` when running debug build disconnected from PC.
+* **Investigation**: Default debug builds in React Native/Expo do not package the JS bundle in assets; instead, they query the Metro server.
+* **Action taken**: Modified `react` block in `android/app/build.gradle` to set `debuggableVariants = []`, forcing asset/JS bundling for debug configurations.
+* **Build/Installation**:
+  1. Ran `.\gradlew assembleDebug` in `android/` directory to compile.
+  2. Packaged and copied output APK to `apks/appace-dev-0.0.6.apk`.
+  3. Ran `adb install -r apks/appace-dev-0.0.6.apk` to install on the phone.
+
+### ✅ Retry Run (Passed)
+* **Result**: Standalone debug APK compiles and installs cleanly. The app launches and runs standalone on the phone.
