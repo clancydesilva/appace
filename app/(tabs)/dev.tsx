@@ -110,6 +110,34 @@ export default function DevToolsScreen() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const parseLog = (log: any) => {
+    const d = new Date(log.timestamp);
+    const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+    
+    let timeLeft = '00:00:00';
+    let appOpen = 'N';
+
+    const balanceMatch = log.details.match(/Balance:\s*(\d+)s/);
+    if (balanceMatch) {
+      const totalSeconds = parseInt(balanceMatch[1], 10);
+      const hrs = Math.floor(totalSeconds / 3600);
+      const mins = Math.floor((totalSeconds % 3600) / 60);
+      const secs = totalSeconds % 60;
+      timeLeft = `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+
+    if (log.event === 'SCREEN_TICK') {
+      appOpen = 'Y';
+    } else if (log.event === 'BLOCK') {
+      appOpen = 'Y';
+      timeLeft = '00:00:00';
+    } else if (log.event === 'DEDUCT') {
+      appOpen = 'N';
+    }
+
+    return { id: log.id, time, timeLeft, appOpen };
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView
@@ -300,31 +328,38 @@ export default function DevToolsScreen() {
                 <Text style={styles.clearLogsText}>Clear Logs</Text>
               </TouchableOpacity>
             </View>
-            <View style={styles.card}>
+            <View style={[styles.card, { paddingHorizontal: 0, paddingVertical: 8 }]}>
               {store.telemetryLogs.filter(l => l.event === 'SCREEN_TICK' || l.event === 'BLOCK' || l.event === 'DEDUCT').length === 0 ? (
                 <Text style={styles.noAppsText}>No active tracking events logged.</Text>
               ) : (
-                store.telemetryLogs
-                  .filter(l => l.event === 'SCREEN_TICK' || l.event === 'BLOCK' || l.event === 'DEDUCT')
-                  .slice(0, 50)
-                  .map((log, idx) => {
-                    const isBlock = log.event === 'BLOCK';
-                    const isDeduct = log.event === 'DEDUCT';
-                    const badgeColor = isBlock ? '#E74C3C' : (isDeduct ? '#95A5A6' : '#1ABC9C');
-                    return (
-                      <View key={log.id} style={[styles.logRow, idx > 0 && styles.borderTop]}>
-                        <View style={styles.logMetaRow}>
-                          <View style={[styles.logBadge, { backgroundColor: badgeColor }]}>
-                            <Text style={styles.logBadgeText}>{log.event}</Text>
-                          </View>
-                          <Text style={styles.logTime}>
-                            {new Date(log.timestamp).toLocaleTimeString()}
+                <View style={styles.tableContainer}>
+                  {/* Table Header */}
+                  <View style={styles.tableHeaderRow}>
+                    <Text style={[styles.tableHeaderCell, { flex: 1.2 }]}>TICK TIME</Text>
+                    <Text style={[styles.tableHeaderCell, { flex: 1.2 }]}>TIME LEFT</Text>
+                    <Text style={[styles.tableHeaderCell, { flex: 0.8, textAlign: 'center' }]}>APP OPEN</Text>
+                  </View>
+                  {/* Table Body */}
+                  {store.telemetryLogs
+                    .filter(l => l.event === 'SCREEN_TICK' || l.event === 'BLOCK' || l.event === 'DEDUCT')
+                    .slice(0, 50)
+                    .map((log, idx) => {
+                      const parsed = parseLog(log);
+                      return (
+                        <View key={log.id} style={[styles.tableDataRow, idx > 0 && styles.tableBorderTop]}>
+                          <Text style={[styles.tableDataCell, { flex: 1.2, fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' }]}>{parsed.time}</Text>
+                          <Text style={[styles.tableDataCell, { flex: 1.2, fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' }]}>{parsed.timeLeft}</Text>
+                          <Text style={[
+                            styles.tableDataCell, 
+                            { flex: 0.8, textAlign: 'center', fontWeight: 'bold' },
+                            parsed.appOpen === 'Y' ? styles.appOpenYes : styles.appOpenNo
+                          ]}>
+                            {parsed.appOpen}
                           </Text>
                         </View>
-                        <Text style={styles.logDetailsText}>{log.details}</Text>
-                      </View>
-                    );
-                  })
+                      );
+                    })}
+                </View>
               )}
             </View>
           </View>
@@ -537,32 +572,39 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     textTransform: 'uppercase',
   },
-  logRow: {
-    paddingVertical: 8,
+  tableContainer: {
+    width: '100%',
   },
-  logMetaRow: {
+  tableHeaderRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
+    borderBottomWidth: 1,
+    borderColor: '#2D2D2D',
+    paddingBottom: 8,
+    paddingHorizontal: 16,
   },
-  logBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  logBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 8,
+  tableHeaderCell: {
+    color: '#888888',
+    fontSize: 10,
     fontWeight: '800',
   },
-  logTime: {
-    color: '#555555',
-    fontSize: 10,
+  tableDataRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
   },
-  logDetailsText: {
+  tableDataCell: {
     color: '#CCCCCC',
     fontSize: 12,
-    lineHeight: 16,
+  },
+  tableBorderTop: {
+    borderTopWidth: 1,
+    borderColor: '#1C1C1C',
+  },
+  appOpenYes: {
+    color: '#2ECC71',
+  },
+  appOpenNo: {
+    color: '#95A5A6',
   },
 });
