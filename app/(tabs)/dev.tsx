@@ -23,6 +23,10 @@ export default function DevToolsScreen() {
   // Diagnostic states
   const [currentTestClock, setCurrentTestClock] = useState<string>('Real Time');
 
+  useEffect(() => {
+    store.fetchTelemetryLogs();
+  }, []);
+
   const showStatus = (msg: string, type: 'info' | 'success' | 'error' = 'success') => {
     setStatusMessage(msg);
     setStatusType(type);
@@ -92,6 +96,7 @@ export default function DevToolsScreen() {
     try {
       await store.fetchBalance();
       await store.checkWindow();
+      await store.fetchTelemetryLogs();
       showStatus('State refreshed from database', 'info');
     } catch (e: any) {
       showStatus(`Error refreshing: ${e.message}`, 'error');
@@ -276,6 +281,50 @@ export default function DevToolsScreen() {
                     <Text style={styles.appNameText}>{pkg}</Text>
                   </View>
                 ))
+              )}
+            </View>
+          </View>
+
+          {/* Tracking Audit Log */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionHeader}>Tracking Audit Log</Text>
+              <TouchableOpacity onPress={async () => {
+                try {
+                  await store.clearTelemetryLogs();
+                  showStatus('Logs cleared');
+                } catch (e: any) {
+                  showStatus(`Error clearing: ${e.message}`, 'error');
+                }
+              }}>
+                <Text style={styles.clearLogsText}>Clear Logs</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.card}>
+              {store.telemetryLogs.filter(l => l.event === 'SCREEN_TICK' || l.event === 'BLOCK' || l.event === 'DEDUCT').length === 0 ? (
+                <Text style={styles.noAppsText}>No active tracking events logged.</Text>
+              ) : (
+                store.telemetryLogs
+                  .filter(l => l.event === 'SCREEN_TICK' || l.event === 'BLOCK' || l.event === 'DEDUCT')
+                  .slice(0, 50)
+                  .map((log, idx) => {
+                    const isBlock = log.event === 'BLOCK';
+                    const isDeduct = log.event === 'DEDUCT';
+                    const badgeColor = isBlock ? '#E74C3C' : (isDeduct ? '#95A5A6' : '#1ABC9C');
+                    return (
+                      <View key={log.id} style={[styles.logRow, idx > 0 && styles.borderTop]}>
+                        <View style={styles.logMetaRow}>
+                          <View style={[styles.logBadge, { backgroundColor: badgeColor }]}>
+                            <Text style={styles.logBadgeText}>{log.event}</Text>
+                          </View>
+                          <Text style={styles.logTime}>
+                            {new Date(log.timestamp).toLocaleTimeString()}
+                          </Text>
+                        </View>
+                        <Text style={styles.logDetailsText}>{log.details}</Text>
+                      </View>
+                    );
+                  })
               )}
             </View>
           </View>
@@ -475,5 +524,45 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderColor: '#1C1C1C',
     paddingTop: 8,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  clearLogsText: {
+    color: '#E74C3C',
+    fontSize: 11,
+    fontWeight: 'bold',
+    textTransform: 'uppercase',
+  },
+  logRow: {
+    paddingVertical: 8,
+  },
+  logMetaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  logBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  logBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 8,
+    fontWeight: '800',
+  },
+  logTime: {
+    color: '#555555',
+    fontSize: 10,
+  },
+  logDetailsText: {
+    color: '#CCCCCC',
+    fontSize: 12,
+    lineHeight: 16,
   },
 });
