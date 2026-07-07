@@ -319,3 +319,14 @@ Use this file to log every test run, errors encountered, changes made, and verif
 ### ✅ Retry Run (Passed)
 * **Result**: Standalone debug APK compiles and installs cleanly. The app starts on the phone with the fresh onboarding setup flow and displays the "Dev Tools" screen.
 
+---
+
+## [2026-07-07 13:10] Dev Tools Active Screen Tracking Audit Log (v0.0.6)
+
+* **Test Goal**: Verify that accessibility service active checks (every 5 seconds) are logged to the database as `SCREEN_TICK` and are visible in the Dev Tools tab.
+* **Environment**: Physical Samsung Galaxy S24 (`R3CX908LHVM`), Expo SDK 54, branch `dev-tick-tracker`.
+
+### ✅ Test Run (Passed)
+* **Result**: After opening a tracked app (YouTube) for 15 seconds, navigations back to Dev Tools display the `SCREEN_TICK` event badge along with the correct balance decreasing. The "Clear Logs" and "Refresh" actions work successfully.
+
+
