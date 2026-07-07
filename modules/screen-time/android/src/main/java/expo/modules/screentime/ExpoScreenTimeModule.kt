@@ -22,6 +22,10 @@ class ExpoScreenTimeModule : Module() {
     override fun definition() = ModuleDefinition {
         Name("ExpoScreenTime")
 
+        Constants(
+            "isDebug" to ((context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0)
+        )
+
         OnDestroy {
             scope.cancel()
         }
@@ -300,6 +304,10 @@ class ExpoScreenTimeModule : Module() {
                     promise.reject("ERR_TICK", e.message, e)
                 }
             }
+        }
+
+        AsyncFunction("isDebug") { ->
+            (context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
         }
     }
 }

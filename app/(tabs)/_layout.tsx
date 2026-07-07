@@ -1,5 +1,6 @@
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import ScreenTime from '../../modules/screen-time';
 
 export default function TabLayout() {
   return (
@@ -44,7 +45,7 @@ export default function TabLayout() {
         name="dev"
         options={{
           title: 'Dev Tools',
-          href: __DEV__ ? undefined : null,
+          href: (__DEV__ || ScreenTime.isDebug) ? undefined : null,
           tabBarIcon: ({ color }) => (
             <Ionicons name="construct-outline" size={22} color={color} />
           ),

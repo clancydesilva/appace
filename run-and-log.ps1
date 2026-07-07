@@ -15,4 +15,4 @@ Write-Host "==================================================" -ForegroundColor
 
 # Start Expo and Tee output to console and file
 # Metro bundler remains interactive
-npx expo run:android | Tee-Object -FilePath $logFile
+npx expo run:android --device Pixel_6_API_34i | Tee-Object -FilePath $logFile

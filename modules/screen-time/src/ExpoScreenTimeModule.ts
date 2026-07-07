@@ -27,6 +27,7 @@ declare class ExpoScreenTimeModule extends NativeModule {
   setTestClock(isoString: string): Promise<void>;
   clearTestClock(): Promise<void>;
   forceTick(): Promise<void>;
+  isDebug: boolean;
 }
 
 export default requireNativeModule<ExpoScreenTimeModule>('ExpoScreenTime');

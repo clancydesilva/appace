@@ -17,6 +17,7 @@ import { useTimerStore } from '../../store/useTimerStore';
 import { PermissionsStatus } from '../../components/settings/PermissionsStatus';
 import { DiagnosticData } from '../../components/settings/DiagnosticData';
 import { BudgetSettings } from '../../components/settings/BudgetSettings';
+import ScreenTime from '../../modules/screen-time';
 
 export default function SettingsScreen() {
   const store = useTimerStore();
@@ -60,7 +61,7 @@ export default function SettingsScreen() {
 
           <PermissionsStatus />
 
-          {__DEV__ && <DiagnosticData />}
+          {(__DEV__ || ScreenTime.isDebug) && <DiagnosticData />}
         </ScrollView>
       </KeyboardAvoidingView>
 
