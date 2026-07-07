@@ -56,7 +56,8 @@ class AppWatcherService : AccessibilityService() {
                 activeTrackingJob?.cancel()
                 scope.launch {
                     val secs = deductElapsedTime(deductFrom)
-                    TelemetryLogger.log(applicationContext, "DEDUCT", "Left to system UI from $prevApp, deducted ${secs}s")
+                    val balance = repo.getBalance().balanceSeconds
+                    TelemetryLogger.log(applicationContext, "DEDUCT", "Left to system UI from $prevApp, deducted ${secs}s, Balance: ${balance}s")
                 }
             }
             return
@@ -78,7 +79,8 @@ class AppWatcherService : AccessibilityService() {
                 // If we switched directly from another tracked app, deduct its time first
                 if (prevApp != null && prevApp != pkg) {
                     val secs = deductElapsedTime(deductFrom)
-                    TelemetryLogger.log(applicationContext, "DEDUCT", "Switched $prevApp -> $pkg, deducted ${secs}s")
+                    val balance = repo.getBalance().balanceSeconds
+                    TelemetryLogger.log(applicationContext, "DEDUCT", "Switched $prevApp -> $pkg, deducted ${secs}s, Balance: ${balance}s")
                     // Reset baseline after deduction to avoid double-counting
                     lastDeductionTime = SystemClock.elapsedRealtime()
                 }
@@ -122,7 +124,8 @@ class AppWatcherService : AccessibilityService() {
                 activeTrackingJob?.cancel()
                 scope.launch {
                     val secs = deductElapsedTime(deductFrom)
-                    TelemetryLogger.log(applicationContext, "DEDUCT", "Left $prevApp for $pkg, deducted ${secs}s")
+                    val balance = repo.getBalance().balanceSeconds
+                    TelemetryLogger.log(applicationContext, "DEDUCT", "Left $prevApp for $pkg, deducted ${secs}s, Balance: ${balance}s")
                 }
             }
         }
