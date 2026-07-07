@@ -292,3 +292,30 @@ Use this file to log every test run, errors encountered, changes made, and verif
 * **Kotlin tests**: `.\gradlew.bat test` — BUILD SUCCESSFUL, all 6 BalanceRepository tests passing (including the new set balance test).
 * **Build/Metro**: App successfully builds and bundles on dev branch.
 
+---
+
+## [2026-07-07 08:40] Standalone Dev/Debug APK Packaging (v0.0.6)
+
+* **Test Goal**: Build a standalone debug APK containing packaged JS assets to run offline on physical devices while keeping `__DEV__` (Dev Tools) enabled.
+* **Environment**: Physical Samsung Galaxy S24 (`R3CX908LHVM`), Expo SDK 54, branch `dev`.
+
+### ❌ Initial Run (Failed)
+* **Error**: Crash on launch with `java.lang.RuntimeException: Unable to load script` when running debug build disconnected from PC.
+* **Investigation**: Default debug builds in React Native/Expo do not package the JS bundle in assets; instead, they query the Metro server.
+* **Action taken**: Modified `react` block in `android/app/build.gradle` to set `debuggableVariants = []`, forcing asset/JS bundling for debug configurations.
+* **Build/Installation**:
+  1. Ran `.\gradlew assembleDebug` in `android/` directory to compile.
+  2. Packaged and copied output APK to `apks/appace-dev-0.0.6.apk`.
+  3. Ran `adb install -r apks/appace-dev-0.0.6.apk` to install on the phone.
+
+### ❌ Second Run (Failed)
+* **Error**: The app loaded standalone but did not display the "Dev Tools" tab or diagnostics data.
+* **Investigation**: When React Native bundles JS code for standalone asset deployment, the bundler sets `__DEV__` to `false` for optimizations (even for debug builds).
+* **Action taken**:
+  1. Exposed synchronous `isDebug` constant in `ExpoScreenTimeModule.kt` utilizing `(context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0` check.
+  2. Updated `app/(tabs)/_layout.tsx` and `app/(tabs)/settings.tsx` to check `__DEV__ || ScreenTime.isDebug`.
+  3. Ran `adb -s R3CX908LHVM shell pm clear com.clancy.appace` to reset all storage database caches and force onboarding restart.
+
+### ✅ Retry Run (Passed)
+* **Result**: Standalone debug APK compiles and installs cleanly. The app starts on the phone with the fresh onboarding setup flow and displays the "Dev Tools" screen.
+
