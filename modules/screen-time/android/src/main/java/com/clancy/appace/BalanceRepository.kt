@@ -2,12 +2,16 @@ package com.clancy.appace
 
 import android.content.Context
 import java.time.LocalDateTime
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.runBlocking
 
 class BalanceRepository(private val context: Context) {
     private val dao = AppDatabase.getInstance(context).balanceDao()
 
     companion object {
         var testDateTime: LocalDateTime? = null
+        private val mutex = Mutex()
     }
 
     private fun getCurrentDateTime(): LocalDateTime {
@@ -79,68 +83,72 @@ class BalanceRepository(private val context: Context) {
 
     // Core daily logic — called by WorkManager every 15 mins. Idempotent by design.
     fun tick() {
-        val now = getCurrentDateTime()
-        var current = getBalance()
-        val todayStr = now.toLocalDate().toString()
-        val currentHour = now.hour
+        runBlocking {
+            mutex.withLock {
+                val now = getCurrentDateTime()
+                var current = getBalance()
+                val todayStr = now.toLocalDate().toString()
+                val currentHour = now.hour
 
-        // 1. RESET — new day, wipe previous day's state
-        if (todayStr != current.lastResetDate) {
-            current = current.copy(
-                balanceSeconds = 0,
-                lastResetDate = todayStr,
-                windowOpenGrantedToday = false,
-                lastAccrualHour = -1
-            )
-            dao.upsert(current)
-        }
-
-        // 2. Outside window — do nothing
-        if (!isWithinWindow()) return
-
-        // 3. OPENING BALANCE — grant once at window start if not yet done today
-        if (!current.windowOpenGrantedToday) {
-            current = current.copy(
-                balanceSeconds = current.balanceSeconds + current.openingBalanceSeconds,
-                windowOpenGrantedToday = true,
-                lastAccrualHour = current.windowStartHour
-            )
-            dao.upsert(current)
-            TelemetryLogger.log(context, "TICK", "Opening balance granted: ${current.openingBalanceSeconds / 60}m. Balance: ${current.balanceSeconds / 60}m")
-            return
-        }
-
-        // 4. HOURLY ACCRUAL — grant silently if we've moved into a new hour since last accrual
-        // No notification fired here — silent drop by design
-        if (currentHour > current.lastAccrualHour) {
-            var updatedBalance = current.balanceSeconds
-            var accrualsCount = 0
-            for (hr in (current.lastAccrualHour + 1)..currentHour) {
-                if (hr < current.windowEndHour) {
-                    val hoursSinceStart = hr - current.windowStartHour
-                    if (hoursSinceStart >= 0 && hoursSinceStart % current.accrualIntervalHours == 0) {
-                        updatedBalance += current.hourlyAccrualSeconds
-                        accrualsCount++
-                    }
+                // 1. RESET — new day, wipe previous day's state
+                if (todayStr != current.lastResetDate) {
+                    current = current.copy(
+                        balanceSeconds = 0,
+                        lastResetDate = todayStr,
+                        windowOpenGrantedToday = false,
+                        lastAccrualHour = -1
+                    )
+                    dao.upsert(current)
                 }
-            }
-            val targetLastAccrual = minOf(currentHour, current.windowEndHour - 1)
-            if (targetLastAccrual > current.lastAccrualHour) {
-                current = current.copy(
-                    balanceSeconds = updatedBalance,
-                    lastAccrualHour = targetLastAccrual
-                )
-                dao.upsert(current)
-                if (accrualsCount > 0) {
-                    TelemetryLogger.log(context, "TICK", "Accrual granted (${accrualsCount}x). Balance: ${current.balanceSeconds / 60}m")
+
+                // 2. Outside window — do nothing
+                if (!isWithinWindow()) return@withLock
+
+                // 3. OPENING BALANCE — grant once at window start if not yet done today
+                if (!current.windowOpenGrantedToday) {
+                    current = current.copy(
+                        balanceSeconds = current.balanceSeconds + current.openingBalanceSeconds,
+                        windowOpenGrantedToday = true,
+                        lastAccrualHour = current.windowStartHour
+                    )
+                    dao.upsert(current)
+                    TelemetryLogger.log(context, "TICK", "Opening balance granted: ${current.openingBalanceSeconds / 60}m. Balance: ${current.balanceSeconds / 60}m")
+                    return@withLock
+                }
+
+                // 4. HOURLY ACCRUAL — grant silently if we've moved into a new hour since last accrual
+                // No notification fired here — silent drop by design
+                if (currentHour > current.lastAccrualHour) {
+                    var updatedBalance = current.balanceSeconds
+                    var accrualsCount = 0
+                    for (hr in (current.lastAccrualHour + 1)..currentHour) {
+                        if (hr < current.windowEndHour) {
+                            val hoursSinceStart = hr - current.windowStartHour
+                            if (hoursSinceStart >= 0 && hoursSinceStart % current.accrualIntervalHours == 0) {
+                                updatedBalance += current.hourlyAccrualSeconds
+                                accrualsCount++
+                            }
+                        }
+                    }
+                    val targetLastAccrual = minOf(currentHour, current.windowEndHour - 1)
+                    if (targetLastAccrual > current.lastAccrualHour) {
+                        current = current.copy(
+                            balanceSeconds = updatedBalance,
+                            lastAccrualHour = targetLastAccrual
+                        )
+                        dao.upsert(current)
+                        if (accrualsCount > 0) {
+                            TelemetryLogger.log(context, "TICK", "Accrual granted (${accrualsCount}x). Balance: ${current.balanceSeconds / 60}m")
+                        } else {
+                            TelemetryLogger.log(context, "TICK", "Periodic check. Balance: ${current.balanceSeconds / 60}m")
+                        }
+                    } else {
+                        TelemetryLogger.log(context, "TICK", "Periodic check. Balance: ${current.balanceSeconds / 60}m")
+                    }
                 } else {
                     TelemetryLogger.log(context, "TICK", "Periodic check. Balance: ${current.balanceSeconds / 60}m")
                 }
-            } else {
-                TelemetryLogger.log(context, "TICK", "Periodic check. Balance: ${current.balanceSeconds / 60}m")
             }
-        } else {
-            TelemetryLogger.log(context, "TICK", "Periodic check. Balance: ${current.balanceSeconds / 60}m")
         }
 
         /*
