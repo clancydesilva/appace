@@ -7,11 +7,5 @@ export function filterAndSortApps(
 ): InstalledApp[] {
     return apps
         .filter((app) => app.name.toLowerCase().includes(searchQuery.toLowerCase()))
-        .sort((a, b) => {
-            const aTracked = trackedApps.includes(a.package);
-            const bTracked = trackedApps.includes(b.package);
-            if (aTracked && !bTracked) return -1;
-            if (!aTracked && bTracked) return 1;
-            return a.name.localeCompare(b.name);
-        });
+        .sort((a, b) => a.name.localeCompare(b.name));
 }

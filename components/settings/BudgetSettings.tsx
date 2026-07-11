@@ -26,7 +26,7 @@ export function BudgetSettings() {
       setAccrualIntervalStr(String(state.accrualIntervalHours));
       setSelectedPreset(state.budgetType as any);
     });
-  }, [store]);
+  }, []);
 
   const hasChanges = useMemo(() => {
     return (
