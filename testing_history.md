@@ -289,4 +289,41 @@ Use this file to log every test run, errors encountered, changes made, and verif
   3. Ran `adb install -r apks/appace-dev-0.0.6.apk` to install on the phone.
 
 ### ✅ Retry Run (Passed)
-* **Result**: Standalone debug APK compiles and installs cleanly. The app launches and runs standalone on the phone.
+* **Result**: Standalone debug APK compiles and installs cleanly. The app starts on the phone with the fresh onboarding setup flow and displays the "Dev Tools" screen.
+
+---
+
+## [2026-07-07 13:10] Dev Tools Active Screen Tracking Audit Log (v0.0.6)
+
+* **Test Goal**: Verify that accessibility service active checks (every 5 seconds) are logged to the database as `SCREEN_TICK` and are visible in the Dev Tools tab.
+* **Environment**: Physical Samsung Galaxy S24 (`R3CX908LHVM`), Expo SDK 54, branch `dev-tick-tracker`.
+
+### ✅ Test Run (Passed)
+* **Result**: After opening a tracked app (YouTube) for 15 seconds, navigations back to Dev Tools display the `SCREEN_TICK` event badge along with the correct balance decreasing. The "Clear Logs" and "Refresh" actions work successfully.
+
+---
+
+## [2026-07-11 16:05] Timer Accuracy & Double-Tick Fix Verification (v0.0.6.1)
+
+* **Test Goal**: Verify that window focus transitions within the same tracked app do not disrupt timing loops or cancel countdown coroutines, and serialize concurrent `tick()` database operations to eliminate double accruals.
+* **Environment**: Android Emulator (`emulator-5554`), API 34 (x86_64), Expo SDK 54, branch `dev`.
+
+### ✅ Test Run (Passed)
+* **Double Ticking Fix**: Verified that when concurrent service start events trigger two overlapping `tick()` database calls within milliseconds (at `...972` and `...977` ms), the companion `Mutex` serializes them. The first tick correctly applies the catch-up hourly accrual (+5m), and the second tick resolves instantly as a simple periodic check without double-granting.
+* **Timer Accuracy Fix**: Verified that window state change events (such as navigating subpages inside Settings homepage) within the same package `com.android.settings` return early from `onAccessibilityEvent` and keep the active timing coroutine loop and timing baseline alive.
+* **Accuracy Deduction**: Verified that when switching to an ignored package (Home launcher), the final elapsed time since the last tick is precisely calculated (e.g. 1263ms) using the monotonic `SystemClock.elapsedRealtime()` and deducted (1s), logging a single `DEDUCT` event. Ticks completely cease while in ignored packages.
+
+---
+
+## [2026-07-11 19:10] Settings Custom Presets and App List Layout Fixes (v0.0.6.2)
+
+* **Test Goal**: Fix the bug where editing fields in the settings custom preset would constantly reset/auto-fill back to 5 due to background store updates, and fix the UX glitch where toggling an app causes it to immediately jump to the top of the list.
+* **Environment**: Physical Samsung Galaxy S24 (`R3CX908LHVM`), Android Emulator (`emulator-5554`), Expo SDK 54, branch `dev`.
+
+### Changes Made
+1. **`BudgetSettings.tsx`**: Changed the `useEffect` dependency from `[store]` to `[]` to prevent form inputs from resetting to database values during background store state changes.
+2. **`apps.ts`**: Simplified the sorting logic in `filterAndSortApps` to sort strictly alphabetically by app name, keeping elements stationary under the user's thumb when toggled.
+
+### ✅ Test Run (Passed)
+* **Custom Presets**: Verified that you can edit start/end hours, opening balance, hourly accrual, and interval in the custom presets panel without your inputs being overwritten by background updates.
+* **Apps List Toggle**: Verified that toggling apps (like Instagram) changes their state locally and saves them to SharedPreferences without causing the list to jump.
