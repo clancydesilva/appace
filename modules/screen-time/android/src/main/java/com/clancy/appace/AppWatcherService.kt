@@ -65,6 +65,7 @@ class AppWatcherService : AccessibilityService() {
         val trackedApps = getTrackedApps()
 
         if (pkg in trackedApps) {
+            if (pkg == currentTrackedApp) return
             startForegroundServiceIfNeeded()
             val prevApp = currentTrackedApp
             val deductFrom = lastDeductionTime
