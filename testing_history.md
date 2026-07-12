@@ -327,3 +327,20 @@ Use this file to log every test run, errors encountered, changes made, and verif
 ### ✅ Test Run (Passed)
 * **Custom Presets**: Verified that you can edit start/end hours, opening balance, hourly accrual, and interval in the custom presets panel without your inputs being overwritten by background updates.
 * **Apps List Toggle**: Verified that toggling apps (like Instagram) changes their state locally and saves them to SharedPreferences without causing the list to jump.
+
+---
+
+## [2026-07-12 19:54] Redirection Lag, UI Sync, & Fresh Install Backup Fixes (v0.0.6.3)
+
+* **Test Goal**: Fix the 10-second redirection lag by instantly kicking the blocked user to the home screen (using native accessibility action) before React Native cold start loads. Fix the UI balance update race condition on return-to-app. Disable Android Auto Backup to ensure clean reinstalls always present the onboarding screen.
+* **Environment**: Physical Samsung Galaxy S24 (`R3CX908LHVM`), Expo SDK 54, branch `dev`.
+
+### Changes Made
+1. **`AndroidManifest.xml`**: Changed `android:allowBackup` to `false` to disable automatic cloud restoration of databases and settings on reinstall.
+2. **`AppWatcherService.kt`**: Added `performGlobalAction(GLOBAL_ACTION_HOME)` in `launchTimesUpScreen` to drop the user back to the home screen instantly.
+3. **`index.tsx`**: Added a `150ms` delay promise in `refreshState()` before fetching the balance to allow the background Kotlin threads to finish writing the time deduction to Room.
+
+### ✅ Test Run (Passed)
+* **Instant Kick**: Verified that when balance runs out, the user is instantly dropped back to the phone's Home Screen in 0ms, preventing any cold-start exploitation of the blocked app.
+* **UI Race Condition**: Verified that opening Appace immediately shows the correct deducted balance without holding the previous cached balance.
+* **Onboarding Fresh Reinstall**: Verified that uninstalling and reinstalling the app successfully starts on the onboarding layout due to `android:allowBackup="false"` preventing system backup restoration.

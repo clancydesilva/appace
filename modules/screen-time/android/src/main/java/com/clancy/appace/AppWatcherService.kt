@@ -148,6 +148,7 @@ class AppWatcherService : AccessibilityService() {
     }
 
     private fun launchTimesUpScreen() {
+        performGlobalAction(GLOBAL_ACTION_HOME)
         val intent = packageManager.getLaunchIntentForPackage(packageName)?.apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             putExtra("route", "/timesup")
