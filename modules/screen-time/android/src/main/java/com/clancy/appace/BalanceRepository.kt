@@ -112,7 +112,7 @@ class BalanceRepository(private val context: Context) {
                         lastAccrualHour = current.windowStartHour
                     )
                     dao.upsert(current)
-                    TelemetryLogger.log(context, "TICK", "Opening balance granted: ${current.openingBalanceSeconds / 60}m. Balance: ${current.balanceSeconds / 60}m")
+                    TelemetryLogger.log(context, "TICK", "Opening balance granted: ${current.openingBalanceSeconds / 60}m. Balance: ${current.balanceSeconds}s")
                     return@withLock
                 }
 
@@ -138,15 +138,15 @@ class BalanceRepository(private val context: Context) {
                         )
                         dao.upsert(current)
                         if (accrualsCount > 0) {
-                            TelemetryLogger.log(context, "TICK", "Accrual granted (${accrualsCount}x). Balance: ${current.balanceSeconds / 60}m")
+                            TelemetryLogger.log(context, "TICK", "Accrual granted (${accrualsCount}x). Balance: ${current.balanceSeconds}s")
                         } else {
-                            TelemetryLogger.log(context, "TICK", "Periodic check. Balance: ${current.balanceSeconds / 60}m")
+                            TelemetryLogger.log(context, "TICK", "Periodic check. Balance: ${current.balanceSeconds}s")
                         }
                     } else {
-                        TelemetryLogger.log(context, "TICK", "Periodic check. Balance: ${current.balanceSeconds / 60}m")
+                        TelemetryLogger.log(context, "TICK", "Periodic check. Balance: ${current.balanceSeconds}s")
                     }
                 } else {
-                    TelemetryLogger.log(context, "TICK", "Periodic check. Balance: ${current.balanceSeconds / 60}m")
+                    TelemetryLogger.log(context, "TICK", "Periodic check. Balance: ${current.balanceSeconds}s")
                 }
             }
         }

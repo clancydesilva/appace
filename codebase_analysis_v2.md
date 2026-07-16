@@ -1,9 +1,10 @@
 # Appace — Consolidated Codebase Audit (V2 Master)
 
-This document serves as the master, merged audit report for the Appace codebase. It consolidates all findings, security vulnerabilities, timing edge cases, and code quality issues identified across three audit passes:
+This document serves as the master, merged audit report for the Appace codebase. It consolidates all findings, security vulnerabilities, timing edge cases, and code quality issues identified across four audit passes:
 1. **First Pass (V1):** 8 June 2026
 2. **Second Pass (V2):** 12 July 2026
 3. **Third Pass (V3):** 13 July 2026
+4. **Fourth Pass (V4):** 16 July 2026
 
 By combining these reports, we maintain a complete historical trace of codebase issues, track resolved issues, and list all open priorities for active development.
 
@@ -129,10 +130,10 @@ By combining these reports, we maintain a complete historical trace of codebase 
   fun trimOldLogs()
   ```
 
-### H2 — `BalanceRepository` instantiated on every property access
+### H2 — `updateSettings` bypasses `BalanceRepository` with a direct DAO write
 * **File:** [ExpoScreenTimeModule.kt:17](file:///c:/Users/clanc/Desktop/College/appace/modules/screen-time/android/src/main/java/expo/modules/screentime/ExpoScreenTimeModule.kt#L17)
-* **The Problem:** Every time the Expo module handles an operation, a brand new `BalanceRepository` instance is allocated.
-* **Fix:** Implement the repository as a thread-safe singleton (e.g., companion object with `getInstance(context)`).
+* **The Problem:** `repo` uses `by lazy` and is instantiated only once per module lifetime — not on every call. However, `updateSettings` at L149 bypasses `repo` entirely with a direct `AppDatabase.getInstance(context).balanceDao().upsert(updated)` call, creating a second, uncoordinated write path that is not governed by the repository or its mutex.
+* **Fix:** Route all DAO mutations through a single `BalanceRepository` singleton (companion object `getInstance(context)`), and remove the direct DAO access in `updateSettings`.
 
 ### H3 — `deductElapsedTime` races on `lastDeductionTime`
 * **File:** [AppWatcherService.kt:80-86](file:///c:/Users/clanc/Desktop/College/appace/modules/screen-time/android/src/main/java/com/clancy/appace/AppWatcherService.kt#L80-L86)
@@ -209,10 +210,10 @@ By combining these reports, we maintain a complete historical trace of codebase 
 * **The Problem:** Inside `mutex.withLock`, `isWithinWindow()` is called. That call internally executes `getBalance()` -> `initIfEmpty()`, causing 3-4 nested DB queries inside a locked thread context.
 * **Fix:** Overload `isWithinWindow(balance: BalanceEntity?)` to accept the pre-loaded entity directly.
 
-### H17 — Double-grant risk on window opening bounds
+### H17 — Redundant telemetry writes on every `AccrualWorker` cycle
 * **File:** [AccrualWorker.kt](file:///c:/Users/clanc/Desktop/College/appace/modules/screen-time/android/src/main/java/com/clancy/appace/AccrualWorker.kt)
-* **The Problem:** If `AccrualWorker` ticks exactly at 6:00 AM, it grants the opening balance and triggers the foreground service. The service starts and immediately attempts to run `tick()` as well.
-* **Fix:** Ensure the second tick returns early if `windowOpenGrantedToday` matches the current date. (Idempotency rules guard this, but double checks are required).
+* **The Problem:** `AccrualWorker.doWork()` calls `tick()` then starts `ForegroundService`, which calls `tick()` again. The `mutex` is declared in `BalanceRepository`'s `companion object` and is therefore shared across all instances — the second `tick()` blocks until the first finishes and then sees the already-committed `lastAccrualHour`, so a double accrual grant does not occur. However, the second `tick()` still executes and writes a redundant `"Periodic check"` telemetry row on every 15-minute cycle, producing unnecessary DB writes and log noise.
+* **Fix:** Remove `repo.tick()` from `ForegroundService.onStartCommand()`. `AccrualWorker` should be the sole trigger for periodic ticks.
 
 ### H18 — Accessibility service queries shared preferences synchronously on every event
 * **File:** [AppWatcherService.kt:28-31](file:///c:/Users/clanc/Desktop/College/appace/modules/screen-time/android/src/main/java/com/clancy/appace/AppWatcherService.kt#L28-L31)
@@ -228,10 +229,10 @@ By combining these reports, we maintain a complete historical trace of codebase 
 
 ## 3. 🟡 Medium Issues (Open)
 
-### M1 — Schema changes silently wipe user data
+### M1 — Schema changes silently wipe user data on v1/v2 → v3 upgrades
 * **File:** [AppDatabase.kt:22](file:///c:/Users/clanc/Desktop/College/appace/modules/screen-time/android/src/main/java/com/clancy/appace/AppDatabase.kt#L22)
-* **The Problem:** Relying on `fallbackToDestructiveMigration()` destroys local settings and metrics when upgrading DB versions.
-* **Fix:** Write explicit `Migration` classes and switch to `.addMigrations()` prior to production release.
+* **The Problem:** The database now uses `fallbackToDestructiveMigrationFrom(1, 2)`, which destroys all local settings and balance data for users upgrading from DB version 1 or 2 to version 3. This is an improvement over the previous `fallbackToDestructiveMigration()` call (a future v3→v4 bump will crash rather than silently wipe), but existing installs on v1 or v2 still lose all data on upgrade.
+* **Fix:** Write explicit `Migration` classes for the v1→v3 and v2→v3 paths, and switch to `.addMigrations()` prior to production release.
 
 ### M2 — Stale Zustand state hooks in useEffect
 * **File:** [index.tsx:29-61](file:///c:/Users/clanc/Desktop/College/appace/app/(tabs)/index.tsx#L29-L61)
@@ -373,7 +374,7 @@ By combining these reports, we maintain a complete historical trace of codebase 
 * **Files:**
   - [app.json:5](file:///c:/Users/clanc/Desktop/College/appace/app.json#L5)
   - [package.json:3](file:///c:/Users/clanc/Desktop/College/appace/package.json#L3)
-* **The Problem:** Versions are out of sync (`0.0.5` vs `1.0.0`).
+* **The Problem:** Versions are out of sync (`0.6.3` in `app.json` vs `1.0.0` in `package.json`).
 * **Fix:** Sync app and node package versions.
 
 ### L5 — Out-of-bounds inputs crash time label builders
@@ -381,10 +382,6 @@ By combining these reports, we maintain a complete historical trace of codebase 
 * **The Problem:** Passing negative or out-of-bounds integers to `formatHourLabel` displays malformed string values.
 * **Fix:** Restrict inputs using clamping constraints: `Math.max(0, Math.min(24, h))`.
 
-### L6 — Unused router dependencies imported
-* **File:** [StepAccessibility.tsx:3](file:///c:/Users/clanc/Desktop/College/appace/components/onboarding/StepAccessibility.tsx#L3)
-* **The Problem:** Unused routers are imported.
-* **Fix:** Clean up redundant imports.
 
 ### L7 — Apps list sorted inconsistently across panels
 * **File:** [apps.ts](file:///c:/Users/clanc/Desktop/College/appace/utils/apps.ts#L8-L10)
@@ -401,10 +398,6 @@ By combining these reports, we maintain a complete historical trace of codebase 
 * **The Problem:** Includes platform-specific check `Platform.OS === 'android'` inside an Android-only application.
 * **Fix:** Use fixed padding numbers.
 
-### L10 — Incomplete config verification audits
-* **File:** [expo-module.config.json](file:///c:/Users/clanc/Desktop/College/appace/modules/screen-time/expo-module.config.json)
-* **The Problem:** Configuration needs to be verified on clean system builds to prevent naming mismatches.
-* **Fix:** Confirm configuration definitions match export targets.
 
 ### L11 — Accrual limit loop excludes final window boundaries
 * **File:** [budget.ts:5](file:///c:/Users/clanc/Desktop/College/appace/utils/budget.ts#L5)
@@ -436,10 +429,10 @@ By combining these reports, we maintain a complete historical trace of codebase 
 * **The Problem:** Storing dates as strings can cause parsing errors and skip resets.
 * **Fix:** Implement a Room TypeConverter to parse `LocalDate` objects.
 
-### L17 — Missing unit test coverage
+### L17 — Incomplete unit test coverage for concurrency and boundary cases
 * **File:** [BalanceRepositoryTest.kt](file:///c:/Users/clanc/Desktop/College/appace/modules/screen-time/android/src/test/java/com/clancy/appace/BalanceRepositoryTest.kt)
-* **The Problem:** Core functions (`deductSeconds`, `isWithinWindow`, `updateSettings`) lack unit tests.
-* **Fix:** Write tests covering clock jumps, boundary windows, and concurrent deductions.
+* **The Problem:** Six tests have been added covering opening balance, hourly accrual idempotency, midnight reset, `deductSeconds`, `setBalanceSeconds`, and outside-window behaviour. Two gaps remain: (1) no test exercises `deductSeconds` called concurrently with `tick()` (the C6 TOCTOU race), and (2) no test verifies behaviour when `windowStartHour >= windowEndHour` (the H6 invalid-window case).
+* **Fix:** Add a concurrency test for the C6 deduction race, and a boundary test for invalid window-hour configurations.
 
 ### L18 — Drop timing displays ignore custom interval settings
 * **File:** [index.tsx:22](file:///c:/Users/clanc/Desktop/College/appace/app/(tabs)/index.tsx#L22)
@@ -466,7 +459,9 @@ Retrieving arrays using `getStringSet()` is safe in this configuration because e
 
 ---
 
-## 6. Resolved V1 Issues
+## 6. Resolved Issues
+
+### Resolved V1 Issues
 
 The following issues identified in the **8 June 2026 (V1) Audit** have been successfully addressed:
 
@@ -491,6 +486,13 @@ The following issues identified in the **8 June 2026 (V1) Audit** have been succ
 * **5.2 Dead platform properties:** Removed `ios_backgroundColor` from Switch controls.
 * **6.3 Native React error boundaries:** Resolved. Added a root-level `ErrorBoundary` wrapper.
 * **6.6 Unsafe reflection calls inside tracking routines:** Resolved. Replaced `Class.forName()` checks with direct class references to `MainActivity`.
+
+### Resolved V4 Issues
+
+The following issues verified as resolved during the **16 July 2026 (V4)** audit pass:
+
+* **L6 — Unused router dependencies imported:** Resolved. `useRouter` is actively called in [StepAccessibility.tsx](file:///c:/Users/clanc/Desktop/College/appace/components/onboarding/StepAccessibility.tsx) at L33 (`router.push('/privacy' as any)`). The import is not redundant.
+* **L10 — Incomplete config verification audits:** Resolved. `expo-module.config.json` declares `"platforms": ["android"]` and `"modules": ["expo.modules.screentime.ExpoScreenTimeModule"]`, which correctly matches the class path in `ExpoScreenTimeModule.kt`. No naming mismatch found.
 
 ---
 

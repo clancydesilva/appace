@@ -19,11 +19,15 @@ class ExpoScreenTimeModule : Module() {
         get() = context.getSharedPreferences("appace_prefs", Context.MODE_PRIVATE)
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
+    private fun isDebuggable(): Boolean {
+        return (context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
+    }
+
     override fun definition() = ModuleDefinition {
         Name("ExpoScreenTime")
 
         Constants(
-            "isDebug" to ((context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0)
+            "isDebug" to isDebuggable()
         )
 
         OnDestroy {
@@ -263,6 +267,10 @@ class ExpoScreenTimeModule : Module() {
         }
 
         AsyncFunction("setBalanceSeconds") { seconds: Int, promise: Promise ->
+            if (!isDebuggable()) {
+                promise.reject("ERR_SECURITY", "Debug features are disabled in production builds.", null)
+                return@AsyncFunction
+            }
             scope.launch {
                 try {
                     repo.setBalanceSeconds(seconds.toLong())
@@ -274,6 +282,10 @@ class ExpoScreenTimeModule : Module() {
         }
 
         AsyncFunction("setTestClock") { isoString: String, promise: Promise ->
+            if (!isDebuggable()) {
+                promise.reject("ERR_SECURITY", "Debug features are disabled in production builds.", null)
+                return@AsyncFunction
+            }
             scope.launch {
                 try {
                     BalanceRepository.testDateTime = java.time.LocalDateTime.parse(isoString)
@@ -285,6 +297,10 @@ class ExpoScreenTimeModule : Module() {
         }
 
         AsyncFunction("clearTestClock") { promise: Promise ->
+            if (!isDebuggable()) {
+                promise.reject("ERR_SECURITY", "Debug features are disabled in production builds.", null)
+                return@AsyncFunction
+            }
             scope.launch {
                 try {
                     BalanceRepository.testDateTime = null
@@ -296,6 +312,10 @@ class ExpoScreenTimeModule : Module() {
         }
 
         AsyncFunction("forceTick") { promise: Promise ->
+            if (!isDebuggable()) {
+                promise.reject("ERR_SECURITY", "Debug features are disabled in production builds.", null)
+                return@AsyncFunction
+            }
             scope.launch {
                 try {
                     repo.tick()
@@ -304,10 +324,6 @@ class ExpoScreenTimeModule : Module() {
                     promise.reject("ERR_TICK", e.message, e)
                 }
             }
-        }
-
-        AsyncFunction("isDebug") { ->
-            (context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
         }
     }
 }

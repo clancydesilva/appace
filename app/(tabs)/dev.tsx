@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useTimerStore } from '../../store/useTimerStore';
 import { formatHourLabel } from '../../utils/formatTime';
+import { TelemetryLog } from '../../modules/screen-time';
 
 export default function DevToolsScreen() {
   const store = useTimerStore();
@@ -39,8 +40,9 @@ export default function DevToolsScreen() {
     try {
       await store.setBalanceSeconds(seconds);
       showStatus(`Balance set to ${seconds}s (${Math.floor(seconds / 60)}m ${seconds % 60}s)`);
-    } catch (e: any) {
-      showStatus(`Error setting balance: ${e.message}`, 'error');
+    } catch (e) {
+      const err = e as Error;
+      showStatus(`Error setting balance: ${err.message}`, 'error');
     }
   };
 
@@ -54,7 +56,7 @@ export default function DevToolsScreen() {
       await store.setTestClock(inputClock);
       setCurrentTestClock(inputClock);
       showStatus(`Clock overridden to ${inputClock}`);
-    } catch (e: any) {
+    } catch (e) {
       showStatus(`Parsing error: use YYYY-MM-DDTHH:MM:SS format`, 'error');
     }
   };
@@ -68,8 +70,9 @@ export default function DevToolsScreen() {
       await store.setTestClock(isoString);
       setCurrentTestClock(isoString);
       showStatus(`Clock overridden to ${pad(hour)}:${pad(minute)}`);
-    } catch (e: any) {
-      showStatus(`Error setting clock preset: ${e.message}`, 'error');
+    } catch (e) {
+      const err = e as Error;
+      showStatus(`Error setting clock preset: ${err.message}`, 'error');
     }
   };
 
@@ -78,8 +81,9 @@ export default function DevToolsScreen() {
       await store.clearTestClock();
       setCurrentTestClock('Real Time');
       showStatus('Clock reset to system real time');
-    } catch (e: any) {
-      showStatus(`Error clearing clock: ${e.message}`, 'error');
+    } catch (e) {
+      const err = e as Error;
+      showStatus(`Error clearing clock: ${err.message}`, 'error');
     }
   };
 
@@ -87,8 +91,9 @@ export default function DevToolsScreen() {
     try {
       await store.forceTick();
       showStatus('Forced Repository.tick() successfully');
-    } catch (e: any) {
-      showStatus(`Error triggering tick: ${e.message}`, 'error');
+    } catch (e) {
+      const err = e as Error;
+      showStatus(`Error triggering tick: ${err.message}`, 'error');
     }
   };
 
@@ -98,8 +103,9 @@ export default function DevToolsScreen() {
       await store.checkWindow();
       await store.fetchTelemetryLogs();
       showStatus('State refreshed from database', 'info');
-    } catch (e: any) {
-      showStatus(`Error refreshing: ${e.message}`, 'error');
+    } catch (e) {
+      const err = e as Error;
+      showStatus(`Error refreshing: ${err.message}`, 'error');
     }
   };
 
@@ -110,7 +116,7 @@ export default function DevToolsScreen() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const parseLog = (log: any) => {
+  const parseLog = (log: TelemetryLog) => {
     const d = new Date(log.timestamp);
     const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
     
@@ -321,8 +327,9 @@ export default function DevToolsScreen() {
                 try {
                   await store.clearTelemetryLogs();
                   showStatus('Logs cleared');
-                } catch (e: any) {
-                  showStatus(`Error clearing: ${e.message}`, 'error');
+                } catch (e) {
+                  const err = e as Error;
+                  showStatus(`Error clearing: ${err.message}`, 'error');
                 }
               }}>
                 <Text style={styles.clearLogsText}>Clear Logs</Text>
