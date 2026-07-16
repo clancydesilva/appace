@@ -372,7 +372,24 @@ Use this file to log every test run, errors encountered, changes made, and verif
 * **Instant Kick**: Verified that when balance runs out, the user is instantly dropped back to the phone's Home Screen in 0ms, preventing any cold-start exploitation of the blocked app.
 * **UI Race Condition**: Verified that opening Appace immediately shows the correct deducted balance without holding the previous cached balance.
 * **Onboarding Fresh Reinstall**: Verified that uninstalling and reinstalling the app successfully starts on the onboarding layout due to `android:allowBackup="false"` preventing system backup restoration.
+## [2026-07-16 20:45] Dev Tools Audit Fixes (v0.6.3 / v0.0.6.4)
 
+* **Test Goal**: Fix security exposure of mock clock/balance overrides in production, resolve inconsistent formatting in telemetry logs, remove redundant `isDebug` AsyncFunction API, and address TS type warnings in dev tools panel.
+* **Environment**: Android Emulator, JVM JUnit unit testing (Robolectric), TypeScript Compiler verification, branch `dev`.
 
+### Changes Made
+1. **`ExpoScreenTimeModule.kt`**:
+   - Added private `isDebuggable()` check returning `FLAG_DEBUGGABLE` status.
+   - Guarded `setBalanceSeconds`, `setTestClock`, `clearTestClock`, and `forceTick` with `if (!isDebuggable())` checking and throwing secure `ERR_SECURITY` rejections.
+   - Removed the redundant `AsyncFunction("isDebug")` endpoint (since synchronous constant exists).
+2. **`BalanceRepository.kt`**:
+   - Standardized `tick()` logging statements from minute-based metrics (`Balance: 5m`) to seconds (`Balance: 300s`) to align with active loop tracking formats.
+3. **`dev.tsx`**:
+   - Imported `TelemetryLog` from screen-time module.
+   - Typed the parameter of `parseLog` function explicitly with `TelemetryLog`.
+   - Replaced all raw `: any` catch exception signatures with strict typescript type-asserted Error castings.
 
+### ✅ Test Run (Passed)
+* **TypeScript Compiler Check**: Ran `npx tsc --noEmit`. Completed successfully with no errors.
+* **Kotlin Unit Tests**: Ran `.\gradlew test` in android sub-directory. Succeeded with zero failures.
 
