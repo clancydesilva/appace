@@ -107,9 +107,9 @@ android {
         }
         release {
             storeFile file('upload.keystore')
-            storePassword 'appace-upload-key'
-            keyAlias 'upload'
-            keyPassword 'appace-upload-key'
+            storePassword System.getenv("UPLOAD_STORE_PASSWORD") ?: (findProperty("UPLOAD_STORE_PASSWORD") ?: 'appace-upload-key')
+            keyAlias System.getenv("UPLOAD_KEY_ALIAS") ?: (findProperty("UPLOAD_KEY_ALIAS") ?: 'upload')
+            keyPassword System.getenv("UPLOAD_KEY_PASSWORD") ?: (findProperty("UPLOAD_KEY_PASSWORD") ?: 'appace-upload-key')
         }
     }
     buildTypes {
