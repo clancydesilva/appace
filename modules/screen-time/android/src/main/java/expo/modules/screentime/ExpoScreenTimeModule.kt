@@ -19,8 +19,16 @@ class ExpoScreenTimeModule : Module() {
         get() = context.getSharedPreferences("appace_prefs", Context.MODE_PRIVATE)
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
+    private fun isDebuggable(): Boolean {
+        return (context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
+    }
+
     override fun definition() = ModuleDefinition {
         Name("ExpoScreenTime")
+
+        Constants(
+            "isDebug" to isDebuggable()
+        )
 
         OnDestroy {
             scope.cancel()

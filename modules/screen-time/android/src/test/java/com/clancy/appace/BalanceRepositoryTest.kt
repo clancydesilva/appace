@@ -13,6 +13,7 @@ import org.robolectric.annotation.Config
 import java.io.IOException
 import java.time.LocalDate
 import java.time.LocalDateTime
+import kotlinx.coroutines.runBlocking
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -42,7 +43,7 @@ class BalanceRepositoryTest {
     }
 
     @Test
-    fun testOpeningBalanceGrantedOnceAtWindowStart() {
+    fun testOpeningBalanceGrantedOnceAtWindowStart() = runBlocking {
         // Active window starts at 6:00 AM
         val testDay = LocalDate.of(2026, 6, 5)
         BalanceRepository.testDateTime = LocalDateTime.of(testDay, java.time.LocalTime.of(6, 0))
@@ -62,7 +63,7 @@ class BalanceRepositoryTest {
     }
 
     @Test
-    fun testHourlyAccrualIsIdempotent() {
+    fun testHourlyAccrualIsIdempotent() = runBlocking {
         val testDay = LocalDate.of(2026, 6, 5)
 
         // 1. Grant opening balance first at 6:00 AM
@@ -85,7 +86,7 @@ class BalanceRepositoryTest {
     }
 
     @Test
-    fun testMidnightResetWipesBalance() {
+    fun testMidnightResetWipesBalance() = runBlocking {
         val day1 = LocalDate.of(2026, 6, 5)
         val day2 = LocalDate.of(2026, 6, 6)
 
@@ -110,7 +111,7 @@ class BalanceRepositoryTest {
     }
 
     @Test
-    fun testDeductSecondsCannotGoBelowZero() {
+    fun testDeductSecondsCannotGoBelowZero() = runBlocking {
         val current = repo.getBalance()
         db.balanceDao().upsert(current.copy(balanceSeconds = 10L))
 
@@ -120,7 +121,16 @@ class BalanceRepositoryTest {
     }
 
     @Test
-    fun testTickDoesNothingOutsideWindow() {
+    fun testSetBalanceSeconds() = runBlocking {
+        repo.setBalanceSeconds(500L)
+        assertEquals(500L, repo.getBalance().balanceSeconds)
+
+        repo.setBalanceSeconds(-10L)
+        assertEquals(0L, repo.getBalance().balanceSeconds)
+    }
+
+    @Test
+    fun testTickDoesNothingOutsideWindow() = runBlocking {
         val testDay = LocalDate.of(2026, 6, 5)
 
         // Outside window (e.g. 5:00 AM)

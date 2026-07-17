@@ -3,14 +3,15 @@ package com.clancy.appace
 import android.accessibilityservice.AccessibilityService
 import android.content.Intent
 import android.content.SharedPreferences
+import android.os.SystemClock
 import android.view.accessibility.AccessibilityEvent
 import kotlinx.coroutines.*
 
 class AppWatcherService : AccessibilityService() {
     private val repo by lazy { BalanceRepository(this) }
-    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val scope = CoroutineScope(Dispatchers.Main.immediate + SupervisorJob())
     private var currentTrackedApp: String? = null
-    private var usageStartTime: Long = 0
+    private var lastDeductionTime: Long = 0
     private var activeTrackingJob: Job? = null
 
     private val IGNORED_PACKAGES by lazy {
@@ -29,18 +30,34 @@ class AppWatcherService : AccessibilityService() {
         return prefs.getStringSet("tracked_apps", emptySet()) ?: emptySet()
     }
 
+    /**
+     * Deducts the actual elapsed wall-clock time since lastDeductionTime.
+     * Uses SystemClock.elapsedRealtime() (monotonic) to avoid issues with
+     * the user changing the system clock.
+     * Returns the number of seconds deducted.
+     */
+    private suspend fun deductElapsedTime(snapshotTime: Long): Long {
+        val now = SystemClock.elapsedRealtime()
+        val elapsedSeconds = (now - snapshotTime) / 1000
+        if (elapsedSeconds > 0 && repo.isWithinWindow()) {
+            repo.deductSeconds(elapsedSeconds)
+        }
+        return elapsedSeconds
+    }
+
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
         val pkg = event.packageName?.toString() ?: return
         if (pkg in IGNORED_PACKAGES) {
             val prevApp = currentTrackedApp
-            val startTime = usageStartTime
+            val deductFrom = lastDeductionTime
             if (prevApp != null) {
                 currentTrackedApp = null
                 activeTrackingJob?.cancel()
                 scope.launch {
-                    val secondsUsed = (System.currentTimeMillis() - startTime) / 1000
-                    repo.deductSeconds(secondsUsed)
+                    val secs = deductElapsedTime(deductFrom)
+                    val balance = repo.getBalance().balanceSeconds
+                    TelemetryLogger.log(applicationContext, "DEDUCT", "Left to system UI from $prevApp, deducted ${secs}s, Balance: ${balance}s")
                 }
             }
             return
@@ -49,20 +66,24 @@ class AppWatcherService : AccessibilityService() {
         val trackedApps = getTrackedApps()
 
         if (pkg in trackedApps) {
+            if (pkg == currentTrackedApp) return
             startForegroundServiceIfNeeded()
             val prevApp = currentTrackedApp
-            val startTime = usageStartTime
-            
-            // Start tracking new app
+            val deductFrom = lastDeductionTime
+
+            // Start tracking new app — set baseline for elapsed time measurement
             currentTrackedApp = pkg
-            usageStartTime = System.currentTimeMillis()
+            lastDeductionTime = SystemClock.elapsedRealtime()
 
             activeTrackingJob?.cancel()
             activeTrackingJob = scope.launch {
                 // If we switched directly from another tracked app, deduct its time first
                 if (prevApp != null && prevApp != pkg) {
-                    val secondsUsed = (System.currentTimeMillis() - startTime) / 1000
-                    repo.deductSeconds(secondsUsed)
+                    val secs = deductElapsedTime(deductFrom)
+                    val balance = repo.getBalance().balanceSeconds
+                    TelemetryLogger.log(applicationContext, "DEDUCT", "Switched $prevApp -> $pkg, deducted ${secs}s, Balance: ${balance}s")
+                    // Reset baseline after deduction to avoid double-counting
+                    lastDeductionTime = SystemClock.elapsedRealtime()
                 }
 
                 if (!repo.hasTimeRemaining() && repo.isWithinWindow()) {
@@ -72,13 +93,26 @@ class AppWatcherService : AccessibilityService() {
                     return@launch
                 }
 
-                // Active loop: check & deduct every 5 seconds
+                // Active loop: measure & deduct actual elapsed time every ~5 seconds
                 while (currentTrackedApp == pkg && isActive) {
                     delay(5000)
                     if (currentTrackedApp != pkg || !isActive) break
 
-                    repo.deductSeconds(5L)
-                    usageStartTime = System.currentTimeMillis()
+                    if (!repo.isWithinWindow()) {
+                        // Reset baseline to now to avoid retroactive deductions when window starts
+                        lastDeductionTime = SystemClock.elapsedRealtime()
+                        continue
+                    }
+
+                    val now = SystemClock.elapsedRealtime()
+                    val elapsedSeconds = (now - lastDeductionTime) / 1000
+                    if (elapsedSeconds > 0) {
+                        repo.deductSeconds(elapsedSeconds)
+                        lastDeductionTime = now
+                    }
+
+                    val balance = repo.getBalance().balanceSeconds
+                    TelemetryLogger.log(applicationContext, "SCREEN_TICK", "Tracked app: $pkg, Balance: ${balance}s")
 
                     if (!repo.hasTimeRemaining() && repo.isWithinWindow()) {
                         TelemetryLogger.log(applicationContext, "BLOCK", "Active limit hit inside $pkg (0s remaining)")
@@ -89,15 +123,16 @@ class AppWatcherService : AccessibilityService() {
                 }
             }
         } else {
-            // User left a tracked app
+            // User left a tracked app for an untracked app
             val prevApp = currentTrackedApp
-            val startTime = usageStartTime
+            val deductFrom = lastDeductionTime
             if (prevApp != null) {
                 currentTrackedApp = null
                 activeTrackingJob?.cancel()
                 scope.launch {
-                    val secondsUsed = (System.currentTimeMillis() - startTime) / 1000
-                    repo.deductSeconds(secondsUsed)
+                    val secs = deductElapsedTime(deductFrom)
+                    val balance = repo.getBalance().balanceSeconds
+                    TelemetryLogger.log(applicationContext, "DEDUCT", "Left $prevApp for $pkg, deducted ${secs}s, Balance: ${balance}s")
                 }
             }
         }
@@ -112,19 +147,22 @@ class AppWatcherService : AccessibilityService() {
                 applicationContext.startService(serviceIntent)
             }
         } catch (e: Exception) {
-            TelemetryLogger.log(applicationContext, "SERVICE_START_ERR", "AppWatcherService failed to start service: ${e.message}")
+            scope.launch {
+                TelemetryLogger.log(applicationContext, "SERVICE_START_ERR", "AppWatcherService failed to start service: ${e.message}")
+            }
         }
     }
 
     override fun onServiceConnected() {
         super.onServiceConnected()
-        Thread {
+        scope.launch {
             TelemetryLogger.log(applicationContext, "SERVICE_START", "AppWatcherService accessibility active")
             startForegroundServiceIfNeeded()
-        }.start()
+        }
     }
 
     private fun launchTimesUpScreen() {
+        performGlobalAction(GLOBAL_ACTION_HOME)
         val intent = packageManager.getLaunchIntentForPackage(packageName)?.apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             putExtra("route", "/timesup")
@@ -138,9 +176,12 @@ class AppWatcherService : AccessibilityService() {
 
     override fun onDestroy() {
         Thread {
-            TelemetryLogger.log(applicationContext, "SERVICE_STOP", "AppWatcherService accessibility destroyed")
+            runBlocking {
+                TelemetryLogger.log(applicationContext, "SERVICE_STOP", "AppWatcherService accessibility destroyed")
+            }
         }.start()
         scope.cancel()
         super.onDestroy()
     }
 }
+

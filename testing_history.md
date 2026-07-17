@@ -251,4 +251,172 @@ Use this file to log every test run, errors encountered, changes made, and verif
   * Kotlin unit tests successfully compiled and passed cleanly (5/5 passing).
   * TypeScript verification checks completed with no errors.
 
+---
 
+## [2026-07-05 16:45] Timer Accuracy Fix — AppWatcherService Elapsed Time
+
+* **Test Goal**: Fix two user-reported bugs: (1) timer counts down 1.35x slower than real time, (2) sometimes tracked app usage is not detected / timer doesn't count down.
+* **Environment**: Android Emulator (`Pixel_6_API_34i`), Expo SDK 54, branch `phase6/timer-accuracy-fix`.
+
+### Root Cause Analysis
+* **Bug 1 (1.35x slowdown)**: `AppWatcherService` active tracking loop used `delay(5000)` followed by `repo.deductSeconds(5L)` — deducting a fixed 5 seconds. But each loop iteration actually took ~6.75s due to coroutine re-scheduling overhead + Room DB I/O. Ratio: 6.75/5 = 1.35x, matching the user's measurement exactly.
+* **Bug 2 (missed detections)**: Time segments were lost between fixed deductions, and a race condition existed when switching between two tracked apps (old coroutine could deduct before cancellation, then new coroutine would also deduct the full elapsed time).
+
+### Changes Made
+1. **`AppWatcherService.kt`**: Replaced fixed `repo.deductSeconds(5L)` with elapsed wall-clock time measurement using `SystemClock.elapsedRealtime()` (monotonic clock). Added `deductElapsedTime()` helper. Added DEDUCT telemetry logging for all deduction events.
+2. **`app/(tabs)/index.tsx`**: Increased UI balance polling interval from 30s to 10s for more responsive timer display.
+
+### ✅ Test Run (Passed)
+* **Kotlin tests**: `.\gradlew.bat test` — BUILD SUCCESSFUL, all 5 BalanceRepository tests passing.
+* **JS tests**: No JS test script configured (no JS-side tests exist).
+* **Build**: `npx expo run:android` — BUILD SUCCESSFUL in 7m 48s, deployed to emulator.
+* **Emulator**: App launched and running on Pixel_6_API_34i, Metro bundled 1292 modules.
+
+---
+
+## [2026-07-05 17:35] Dev Tools Dashboard Implementation
+
+* **Test Goal**: Add a dev tools dashboard allowing dynamic simulation (setting balance, mock clock override, force tick).
+* **Environment**: Android Emulator (`Pixel_6_API_34i`), Expo SDK 54, branch `dev`.
+
+### Changes Made
+1. **`BalanceRepository.kt`**: Added `setBalanceSeconds(seconds: Long)` method to allow directly setting balance.
+2. **`ExpoScreenTimeModule.kt`**: Added new `AsyncFunction` wrappers for `setBalanceSeconds`, `setTestClock`, `clearTestClock`, and `forceTick`.
+3. **`ExpoScreenTimeModule.ts`**: Declared new method signatures for dev tools APIs.
+4. **`useTimerStore.ts`**: Declared and implemented store actions to call native methods and refresh state.
+5. **`app/(tabs)/_layout.tsx`**: Registered new tab `dev` with `href: __DEV__ ? undefined : null` to render in dev mode only.
+6. **`app/(tabs)/dev.tsx`**: Created a beautiful, fully functional developer panel with presets for balance (0s, 10s, 60s, 5m), clock presets (10:59, 23:59, 5:59), custom clock override input, live state diagnostics, force tick actions, and tracked apps list.
+7. **`BalanceRepositoryTest.kt`**: Added `testSetBalanceSeconds` unit test case.
+
+### ✅ Test Run (Passed)
+* **Kotlin tests**: `.\gradlew.bat test` — BUILD SUCCESSFUL, all 6 BalanceRepository tests passing (including the new set balance test).
+* **Build/Metro**: App successfully builds and bundles on dev branch.
+
+---
+
+## [2026-07-07 08:40] Standalone Dev/Debug APK Packaging (v0.0.6)
+
+* **Test Goal**: Build a standalone debug APK containing packaged JS assets to run offline on physical devices while keeping `__DEV__` (Dev Tools) enabled.
+* **Environment**: Physical Samsung Galaxy S24 (`R3CX908LHVM`), Expo SDK 54, branch `dev`.
+
+### ❌ Initial Run (Failed)
+* **Error**: Crash on launch with `java.lang.RuntimeException: Unable to load script` when running debug build disconnected from PC.
+* **Investigation**: Default debug builds in React Native/Expo do not package the JS bundle in assets; instead, they query the Metro server.
+* **Action taken**: Modified `react` block in `android/app/build.gradle` to set `debuggableVariants = []`, forcing asset/JS bundling for debug configurations.
+* **Build/Installation**:
+  1. Ran `.\gradlew assembleDebug` in `android/` directory to compile.
+  2. Packaged and copied output APK to `apks/appace-dev-0.0.6.apk`.
+  3. Ran `adb install -r apks/appace-dev-0.0.6.apk` to install on the phone.
+
+### ❌ Second Run (Failed)
+* **Error**: The app loaded standalone but did not display the "Dev Tools" tab or diagnostics data.
+* **Investigation**: When React Native bundles JS code for standalone asset deployment, the bundler sets `__DEV__` to `false` for optimizations (even for debug builds).
+* **Action taken**:
+  1. Exposed synchronous `isDebug` constant in `ExpoScreenTimeModule.kt` utilizing `(context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0` check.
+  2. Updated `app/(tabs)/_layout.tsx` and `app/(tabs)/settings.tsx` to check `__DEV__ || ScreenTime.isDebug`.
+  3. Ran `adb -s R3CX908LHVM shell pm clear com.clancy.appace` to reset all storage database caches and force onboarding restart.
+
+### ✅ Retry Run (Passed)
+* **Result**: Standalone debug APK compiles and installs cleanly. The app starts on the phone with the fresh onboarding setup flow and displays the "Dev Tools" screen.
+
+---
+
+## [2026-07-07 13:10] Dev Tools Active Screen Tracking Audit Log (v0.0.6)
+
+* **Test Goal**: Verify that accessibility service active checks (every 5 seconds) are logged to the database as `SCREEN_TICK` and are visible in the Dev Tools tab.
+* **Environment**: Physical Samsung Galaxy S24 (`R3CX908LHVM`), Expo SDK 54, branch `dev-tick-tracker`.
+
+### ✅ Test Run (Passed)
+* **Result**: After opening a tracked app (YouTube) for 15 seconds, navigations back to Dev Tools display the `SCREEN_TICK` event badge along with the correct balance decreasing. The "Clear Logs" and "Refresh" actions work successfully.
+
+---
+
+## [2026-07-11 16:05] Timer Accuracy & Double-Tick Fix Verification (v0.0.6.1)
+
+* **Test Goal**: Verify that window focus transitions within the same tracked app do not disrupt timing loops or cancel countdown coroutines, and serialize concurrent `tick()` database operations to eliminate double accruals.
+* **Environment**: Android Emulator (`emulator-5554`), API 34 (x86_64), Expo SDK 54, branch `dev`.
+
+### ✅ Test Run (Passed)
+* **Double Ticking Fix**: Verified that when concurrent service start events trigger two overlapping `tick()` database calls within milliseconds (at `...972` and `...977` ms), the companion `Mutex` serializes them. The first tick correctly applies the catch-up hourly accrual (+5m), and the second tick resolves instantly as a simple periodic check without double-granting.
+* **Timer Accuracy Fix**: Verified that window state change events (such as navigating subpages inside Settings homepage) within the same package `com.android.settings` return early from `onAccessibilityEvent` and keep the active timing coroutine loop and timing baseline alive.
+* **Accuracy Deduction**: Verified that when switching to an ignored package (Home launcher), the final elapsed time since the last tick is precisely calculated (e.g. 1263ms) using the monotonic `SystemClock.elapsedRealtime()` and deducted (1s), logging a single `DEDUCT` event. Ticks completely cease while in ignored packages.
+
+---
+
+## [2026-07-11 19:10] Settings Custom Presets and App List Layout Fixes (v0.0.6.2)
+
+* **Test Goal**: Fix the bug where editing fields in the settings custom preset would constantly reset/auto-fill back to 5 due to background store updates, and fix the UX glitch where toggling an app causes it to immediately jump to the top of the list.
+* **Environment**: Physical Samsung Galaxy S24 (`R3CX908LHVM`), Android Emulator (`emulator-5554`), Expo SDK 54, branch `dev`.
+
+### Changes Made
+1. **`BudgetSettings.tsx`**: Changed the `useEffect` dependency from `[store]` to `[]` to prevent form inputs from resetting to database values during background store state changes.
+2. **`apps.ts`**: Simplified the sorting logic in `filterAndSortApps` to sort strictly alphabetically by app name, keeping elements stationary under the user's thumb when toggled.
+
+### ✅ Test Run (Passed)
+* **Custom Presets**: Verified that you can edit start/end hours, opening balance, hourly accrual, and interval in the custom presets panel without your inputs being overwritten by background updates.
+* **Apps List Toggle**: Verified that toggling apps (like Instagram) changes their state locally and saves them to SharedPreferences without causing the list to jump.
+
+---
+
+## [2026-07-12 19:54] Redirection Lag, UI Sync, & Fresh Install Backup Fixes (v0.0.6.3)
+
+* **Test Goal**: Fix the 10-second redirection lag by instantly kicking the blocked user to the home screen (using native accessibility action) before React Native cold start loads. Fix the UI balance update race condition on return-to-app. Disable Android Auto Backup to ensure clean reinstalls always present the onboarding screen.
+* **Environment**: Physical Samsung Galaxy S24 (`R3CX908LHVM`), Expo SDK 54, branch `dev`.
+
+### Changes Made
+1. **`AndroidManifest.xml`**: Changed `android:allowBackup` to `false` to disable automatic cloud restoration of databases and settings on reinstall.
+2. **`AppWatcherService.kt`**: Added `performGlobalAction(GLOBAL_ACTION_HOME)` in `launchTimesUpScreen` to drop the user back to the home screen instantly.
+3. **`index.tsx`**: Added a `150ms` delay promise in `refreshState()` before fetching the balance to allow the background Kotlin threads to finish writing the time deduction to Room.
+
+### ✅ Test Run (Passed)
+* **Instant Kick**: Verified that when balance runs out, the user is instantly dropped back to the phone's Home Screen in 0ms, preventing any cold-start exploitation of the blocked app.
+* **UI Race Condition**: Verified that opening Appace immediately shows the correct deducted balance without holding the previous cached balance.
+* **Onboarding Fresh Reinstall**: Verified that uninstalling and reinstalling the app successfully starts on the onboarding layout due to `android:allowBackup="false"` preventing system backup restoration.
+## [2026-07-16 20:45] Dev Tools Audit Fixes (v0.6.3 / v0.0.6.4)
+
+* **Test Goal**: Fix security exposure of mock clock/balance overrides in production, resolve inconsistent formatting in telemetry logs, remove redundant `isDebug` AsyncFunction API, and address TS type warnings in dev tools panel.
+* **Environment**: Android Emulator, JVM JUnit unit testing (Robolectric), TypeScript Compiler verification, branch `dev`.
+
+### Changes Made
+1. **`ExpoScreenTimeModule.kt`**:
+   - Added private `isDebuggable()` check returning `FLAG_DEBUGGABLE` status.
+   - Guarded `setBalanceSeconds`, `setTestClock`, `clearTestClock`, and `forceTick` with `if (!isDebuggable())` checking and throwing secure `ERR_SECURITY` rejections.
+   - Removed the redundant `AsyncFunction("isDebug")` endpoint (since synchronous constant exists).
+2. **`BalanceRepository.kt`**:
+   - Standardized `tick()` logging statements from minute-based metrics (`Balance: 5m`) to seconds (`Balance: 300s`) to align with active loop tracking formats.
+3. **`dev.tsx`**:
+   - Imported `TelemetryLog` from screen-time module.
+   - Typed the parameter of `parseLog` function explicitly with `TelemetryLog`.
+   - Replaced all raw `: any` catch exception signatures with strict typescript type-asserted Error castings.
+
+### ✅ Test Run (Passed)
+* **TypeScript Compiler Check**: Ran `npx tsc --noEmit`. Completed successfully with no errors.
+* **Kotlin Unit Tests**: Ran `.\gradlew test` in android sub-directory. Succeeded with zero failures.
+
+## [2026-07-17 09:35] Critical Issues Audit Fixes (v0.6.3 / v0.0.6.5)
+
+* **Test Goal**: Eliminate plaintext release signing credentials, migrate database write methods to suspend functions with mutex locks, solve accessibility event concurrency races, secure telemetry writes from main thread execution & Android 14+ SecurityExceptions, prevent route bypasses on deep link / app resume, disable back gestures/buttons on blocker screen, and restrict active tracking deductions to active window hours.
+* **Environment**: Android Emulator (`emulator-5554`), JVM Robolectric Unit Tests, Expo SDK 54, branch `critical-fixes-2`.
+
+### Changes Made
+1. **`build.gradle` (C1)**: Load release signing password/alias from environment variables or gradle properties.
+2. **`BalanceRepository.kt` & `BalanceRepositoryTest.kt` (C3, C6, H8)**:
+   - Converted `tick()`, `deductSeconds()`, and `setBalanceSeconds()` to suspend functions.
+   - Synchronized `deductSeconds()` and `setBalanceSeconds()` using `mutex.withLock { ... }`.
+   - Updated unit tests to run in coroutine context (`runBlocking`).
+3. **`AppWatcherService.kt` (C4, C7, C11)**:
+   - Changed coroutine dispatcher to `Dispatchers.Main.immediate` for complete main-thread execution confinement of tracking state variables.
+   - Removed `repo.tick()` double execution call from `ForegroundService.onStartCommand()`.
+   - Guarded loop timing increments and transitional app switches with `repo.isWithinWindow()` checks, resetting baseline time to now outside window bounds.
+4. **`TelemetryLogger.kt` & `BootReceiver.kt` (C5)**:
+   - Converted `log()` to suspend function using `withContext(Dispatchers.IO)`.
+   - Registered battery info checks using `ContextCompat.registerReceiver` with `RECEIVER_NOT_EXPORTED`.
+   - Refactored `BootReceiver` using `goAsync()` with a coroutine scope.
+5. **`_layout.tsx` & `timesup.tsx` (C8, C9, C10, M20)**:
+   - Implemented root layout `RouteGuard` and `AppState` listener checking balance/window and forcing `/timesup` redirects.
+   - Added Android hardware `BackHandler` block to `TimesUpScreen`.
+   - Enabled auto-recovery back to tabs if balance is restored or window ends.
+
+### ✅ Test Run (Passed)
+* **Kotlin compilation and unit tests**: Ran `.\gradlew test` inside `android/` folder. Succeeded with **zero failures** in 3m 26s.
+* **Emulator Build and Launch**: Ran `./run-and-log.ps1`. Compiled successfully, installed to `emulator-5554`, opened, and bundled module assets successfully.

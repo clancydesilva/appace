@@ -36,7 +36,7 @@ export default function HomeScreen() {
       store.checkWindow().catch(console.warn);
       store.checkAccessibility().catch(console.warn);
       store.checkBatteryOptimization().catch(console.warn);
-    }, 30000);
+    }, 10000);
 
     // 3. Setup 1-second clock timer to update progress bar and countdowns
     clockTimer.current = setInterval(() => {
@@ -67,6 +67,8 @@ export default function HomeScreen() {
       return;
     }
     await store.startService();
+    // Wait 150ms to allow Accessibility Service background thread to finish writing any pending time deductions to Room DB
+    await new Promise((resolve) => setTimeout(resolve, 150));
     await store.fetchBalance();
     await store.fetchSettings();
     await store.checkWindow();

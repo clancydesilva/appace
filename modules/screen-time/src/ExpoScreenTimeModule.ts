@@ -23,6 +23,7 @@ declare class ExpoScreenTimeModule extends NativeModule {
   startForegroundService(): Promise<void>;
   getTelemetryLogs(): Promise<TelemetryLog[]>;
   clearTelemetryLogs(): Promise<void>;
+  isDebug: boolean;
 }
 
 export default requireNativeModule<ExpoScreenTimeModule>('ExpoScreenTime');

@@ -59,7 +59,6 @@ class ForegroundService : Service() {
             val repo = BalanceRepository(applicationContext)
             repo.initIfEmpty()
             TelemetryLogger.log(applicationContext, "SERVICE_START", "ForegroundService active, ticks running")
-            repo.tick()
         }
 
         AccrualWorker.schedule(this)
@@ -68,7 +67,9 @@ class ForegroundService : Service() {
 
     override fun onDestroy() {
         Thread {
-            TelemetryLogger.log(applicationContext, "SERVICE_STOP", "ForegroundService stopped")
+            runBlocking {
+                TelemetryLogger.log(applicationContext, "SERVICE_STOP", "ForegroundService stopped")
+            }
         }.start()
         scope.cancel()
         super.onDestroy()

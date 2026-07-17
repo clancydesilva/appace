@@ -4,30 +4,37 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.BatteryManager
+import androidx.core.content.ContextCompat
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 object TelemetryLogger {
-    fun log(context: Context, event: String, details: String) {
-        try {
-            val db = AppDatabase.getInstance(context)
-            val (pct, isCharging) = getBatteryInfo(context)
-            db.telemetryDao().insert(
-                TelemetryEntity(
-                    timestamp = System.currentTimeMillis(),
-                    event = event,
-                    batteryPercent = pct,
-                    isCharging = isCharging,
-                    details = details
+    suspend fun log(context: Context, event: String, details: String) {
+        withContext(Dispatchers.IO) {
+            try {
+                val db = AppDatabase.getInstance(context)
+                val (pct, isCharging) = getBatteryInfo(context)
+                db.telemetryDao().insert(
+                    TelemetryEntity(
+                        timestamp = System.currentTimeMillis(),
+                        event = event,
+                        batteryPercent = pct,
+                        isCharging = isCharging,
+                        details = details
+                    )
                 )
-            )
-        } catch (e: Exception) {
-            e.printStackTrace()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
 
     private fun getBatteryInfo(context: Context): Pair<Int, Boolean> {
-        val batteryStatus: Intent? = context.registerReceiver(
+        val batteryStatus: Intent? = ContextCompat.registerReceiver(
+            context,
             null,
-            IntentFilter(Intent.ACTION_BATTERY_CHANGED)
+            IntentFilter(Intent.ACTION_BATTERY_CHANGED),
+            ContextCompat.RECEIVER_NOT_EXPORTED
         )
         val level = batteryStatus?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
         val scale = batteryStatus?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1

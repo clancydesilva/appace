@@ -27,6 +27,7 @@ Every test run and debug cycle must be tracked to maintain a clean history of is
 
 ## Git — Required on Every Commit
 
+- Always read and follow the Git branching, testing, and cherry-picking instructions in [git_workflow.md](file:///c:/Users/clanc/Desktop/College/appace/git_workflow.md) before merging, cherry-picking, or performing git operations.
 - Always work on a feature branch, never commit directly to `main`.
 - Branch naming: `phase/description` (e.g. `phase1/expo-scaffold`, `phase3/room-db`, `phase3/workmanager`)
 - Run all available tests before every commit. Do not commit if tests fail.
@@ -39,6 +40,7 @@ Every test run and debug cycle must be tracked to maintain a clean history of is
 ## Branch Strategy
 
 - `main` — stable, working code only
+- `dev` — **testing branch. NEVER merge `dev` into `main`.** Feature branches merge here first for testing, then separately into `main` when verified.
 - `phase1/...` — Expo scaffold and navigation
 - `phase2/...` — Android permissions and manifest
 - `phase3/...` — Kotlin native module (sub-branches per component: room-db, workmanager, accessibility-service, rn-bridge)
@@ -47,6 +49,17 @@ Every test run and debug cycle must be tracked to maintain a clean history of is
 - `phase6/...` — Edge case hardening
 - `phase7/...` — Testing & Physical device verification
 - Merge to main only when a full phase is complete and tested.
+
+### Dev Branch Workflow
+
+1. Merge feature branch → `dev` for testing.
+2. If a bug is found in `dev`, fix it and commit on `dev`.
+3. Cherry-pick the fix commit onto the original feature branch:
+   ```bash
+   git checkout feature-branch
+   git cherry-pick <fix-commit-hash>
+   ```
+4. Merge the feature branch (now with the fix) → `main`.
 
 ## Testing
 

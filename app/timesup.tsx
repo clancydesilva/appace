@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, Platform } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, Platform, BackHandler } from 'react-native';
 import { usePreventRemove } from '@react-navigation/native';
 import { useTimerStore } from '../store/useTimerStore';
 import { formatHourLabel } from '../utils/formatTime';
@@ -17,6 +17,13 @@ export default function TimesUpScreen() {
   });
 
   useEffect(() => {
+    const onBackPress = () => {
+      // Return true to indicate we consumed/blocked the hardware back event
+      return true;
+    };
+
+    const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+
     store.fetchSettings().catch(console.warn);
     store.checkWindow().catch(console.warn);
 
@@ -29,6 +36,7 @@ export default function TimesUpScreen() {
     }, 1000);
 
     return () => {
+      subscription.remove();
       if (timer.current) clearInterval(timer.current);
     };
   }, []);
