@@ -70,3 +70,30 @@ Ensure that before merging or switching branches, your working tree is clean to 
 
 * **To check status**: `git status`
 * **To discard temporary changes**: `git restore .` (or `git stash` to save them temporarily)
+
+---
+
+## 4. Parallel Branch Management & One-Way Syncing
+
+To run the clean production branch (`main`) and the developer sandbox (`dev`) in parallel without polluting production with dev tools, adhere to the following rules:
+
+### Rule 1: One-Way Flow (main → dev)
+Information should only flow from `main` to `dev`, never backwards:
+1. When any feature or bug fix is merged into `main`, immediately switch to `dev` and merge `main` in:
+   ```bash
+   git checkout dev
+   git merge main
+   ```
+2. This ensures `dev` always contains the latest production patches and code, while the dev-only code (e.g. `dev.tsx`, clock overrides) remains safely isolated in `dev`.
+
+### Rule 2: Fix on dev, Cherry-pick to Feature, Merge to main
+If you identify and fix a bug while running tests on the `dev` branch:
+1. Commit the fix directly on `dev` (e.g. `[phase7] fix tracking loop race`).
+2. Obtain the commit hash: `git log -n 1 --oneline`.
+3. Switch back to your clean feature branch (which was originally created off `main`).
+4. Cherry-pick the specific fix commit:
+   ```bash
+   git checkout phase/my-feature
+   git cherry-pick <commit-hash>
+   ```
+5. Merge the feature branch (now containing the clean fix) into `main`.
