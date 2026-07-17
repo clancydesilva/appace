@@ -52,4 +52,10 @@ yarn-error.*
 # Local logs
 logs/
 
-
+# Research and consolidated master documentation (kept on docs branch)
+conceptual_plan.md
+technical_plan.md
+future_features.md
+kotlin_primer.md
+codebase_analysis_v2.md
+testing_history.md
