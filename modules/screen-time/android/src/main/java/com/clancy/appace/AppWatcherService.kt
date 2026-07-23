@@ -15,7 +15,7 @@ class AppWatcherService : AccessibilityService() {
     private var lastDeductionTime: Long = 0
     private var activeTrackingJob: Job? = null
 
-    private val IGNORED_PACKAGES by lazy {
+    private val LAUNCHER_PACKAGES by lazy {
         setOf(
             "com.android.systemui",
             "com.android.launcher",
@@ -31,21 +31,6 @@ class AppWatcherService : AccessibilityService() {
         return prefs.getStringSet("tracked_apps", emptySet()) ?: emptySet()
     }
 
-    /**
-     * Deducts the actual elapsed wall-clock time since lastDeductionTime.
-     * Uses SystemClock.elapsedRealtime() (monotonic) to avoid issues with
-     * the user changing the system clock.
-     * Returns the number of seconds deducted.
-     */
-    private suspend fun deductElapsedTime(snapshotTime: Long): Long {
-        val now = SystemClock.elapsedRealtime()
-        val elapsedSeconds = (now - snapshotTime) / 1000
-        if (elapsedSeconds > 0 && repo.isWithinWindow()) {
-            repo.deductSeconds(elapsedSeconds)
-        }
-        return elapsedSeconds
-    }
-
     private fun isInputMethod(pkg: String): Boolean {
         return try {
             val imm = getSystemService(INPUT_METHOD_SERVICE) as? InputMethodManager ?: return false
@@ -55,24 +40,33 @@ class AppWatcherService : AccessibilityService() {
         }
     }
 
+    private fun isTopLevelApp(pkg: String): Boolean {
+        if (pkg in LAUNCHER_PACKAGES) return true
+        return try {
+            packageManager.getLaunchIntentForPackage(pkg) != null
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    private suspend fun deductElapsedTime(snapshotTime: Long): Long {
+        val now = SystemClock.elapsedRealtime()
+        val elapsedSeconds = (now - snapshotTime) / 1000
+        if (elapsedSeconds > 0 && repo.isWithinWindow()) {
+            repo.deductSeconds(elapsedSeconds)
+        }
+        return elapsedSeconds
+    }
+
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
         val pkg = event.packageName?.toString() ?: return
 
-        val isIme = isInputMethod(pkg)
-        val isIgnored = pkg in IGNORED_PACKAGES
+        // 1. Ignore input methods (keyboards)
+        if (isInputMethod(pkg)) return
 
-        if (isIme) {
-            // IME (keyboard) opened over active app — do not interrupt tracking
-            return
-        }
-
-        if (isIgnored) {
-            val rootPkg = try { rootInActiveWindow?.packageName?.toString() } catch (e: Exception) { null }
-            if (rootPkg != null && rootPkg == currentTrackedApp) {
-                // Transient system overlay (e.g. volume slider, toast, shade) over tracked app — ignore
-                return
-            }
+        // 2. If package is launcher or appace itself (user went home or opened appace app)
+        if (pkg in LAUNCHER_PACKAGES) {
             val prevApp = currentTrackedApp
             val deductFrom = lastDeductionTime
             if (prevApp != null) {
@@ -81,7 +75,7 @@ class AppWatcherService : AccessibilityService() {
                 scope.launch {
                     val secs = deductElapsedTime(deductFrom)
                     val balance = repo.getBalance().balanceSeconds
-                    TelemetryLogger.log(applicationContext, "DEDUCT", "Left to system UI from $prevApp, deducted ${secs}s, Balance: ${balance}s")
+                    TelemetryLogger.log(applicationContext, "DEDUCT", "Left to system UI/launcher from $prevApp, deducted ${secs}s, Balance: ${balance}s")
                 }
             }
             return
@@ -89,6 +83,7 @@ class AppWatcherService : AccessibilityService() {
 
         val trackedApps = getTrackedApps()
 
+        // 3. Package is a tracked application
         if (pkg in trackedApps) {
             if (pkg == currentTrackedApp) return
             startForegroundServiceIfNeeded()
@@ -147,14 +142,13 @@ class AppWatcherService : AccessibilityService() {
                 }
             }
         } else {
-            // Check if root active window is still the tracked app (e.g. transient dialog or popup)
-            val rootPkg = try { rootInActiveWindow?.packageName?.toString() } catch (e: Exception) { null }
-            if (rootPkg != null && (rootPkg == currentTrackedApp || rootPkg in IGNORED_PACKAGES || isInputMethod(rootPkg))) {
-                // Active window is still the tracked app or system UI/IME — do not cancel tracking
+            // 4. Package is untracked — only stop tracking if it is a top-level app (has a launch intent)
+            if (!isTopLevelApp(pkg)) {
+                // Internal service/system component popup (e.g. gms, play services, ads) — ignore
                 return
             }
 
-            // User left a tracked app for an untracked app
+            // User left a tracked app for a top-level untracked app
             val prevApp = currentTrackedApp
             val deductFrom = lastDeductionTime
             if (prevApp != null) {
@@ -215,4 +209,3 @@ class AppWatcherService : AccessibilityService() {
         super.onDestroy()
     }
 }
-
