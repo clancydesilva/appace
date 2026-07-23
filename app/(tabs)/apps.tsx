@@ -17,6 +17,7 @@ export default function AppsScreen() {
   const store = useTimerStore();
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
+  const [initialTrackedApps, setInitialTrackedApps] = useState<string[]>([]);
 
   useEffect(() => {
     setLoading(true);
@@ -27,8 +28,9 @@ export default function AppsScreen() {
         const installedPackages = state.installedApps.map((a) => a.package);
         const cleaned = state.trackedApps.filter((p) => installedPackages.includes(p));
         if (cleaned.length !== state.trackedApps.length) {
-          return state.setTrackedApps(cleaned);
+          state.setTrackedApps(cleaned);
         }
+        setInitialTrackedApps(useTimerStore.getState().trackedApps);
       })
       .catch(console.warn)
       .finally(() => setLoading(false));
@@ -49,7 +51,8 @@ export default function AppsScreen() {
     await store.setTrackedApps(currentTracked);
   };
 
-  const filteredApps = filterAndSortApps(store.installedApps, store.trackedApps, searchQuery);
+  const sortBaseline = initialTrackedApps.length > 0 ? initialTrackedApps : store.trackedApps;
+  const filteredApps = filterAndSortApps(store.installedApps, sortBaseline, searchQuery);
 
   return (
     <SafeAreaView style={styles.safeArea}>
