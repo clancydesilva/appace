@@ -10,7 +10,7 @@ import kotlinx.coroutines.*
 
 class AppWatcherService : AccessibilityService() {
     private val repo by lazy { BalanceRepository(this) }
-    private val scope = CoroutineScope(Dispatchers.Main.immediate + SupervisorJob())
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var currentTrackedApp: String? = null
     private var lastDeductionTime: Long = 0
     private var activeTrackingJob: Job? = null
