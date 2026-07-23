@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.os.SystemClock
 import android.view.accessibility.AccessibilityEvent
+import android.view.inputmethod.InputMethodManager
 import kotlinx.coroutines.*
 
 class AppWatcherService : AccessibilityService() {
@@ -45,10 +46,33 @@ class AppWatcherService : AccessibilityService() {
         return elapsedSeconds
     }
 
+    private fun isInputMethod(pkg: String): Boolean {
+        return try {
+            val imm = getSystemService(INPUT_METHOD_SERVICE) as? InputMethodManager ?: return false
+            imm.enabledInputMethodList.any { it.packageName == pkg }
+        } catch (e: Exception) {
+            false
+        }
+    }
+
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
         val pkg = event.packageName?.toString() ?: return
-        if (pkg in IGNORED_PACKAGES) {
+
+        val isIme = isInputMethod(pkg)
+        val isIgnored = pkg in IGNORED_PACKAGES
+
+        if (isIme) {
+            // IME (keyboard) opened over active app — do not interrupt tracking
+            return
+        }
+
+        if (isIgnored) {
+            val rootPkg = try { rootInActiveWindow?.packageName?.toString() } catch (e: Exception) { null }
+            if (rootPkg != null && rootPkg == currentTrackedApp) {
+                // Transient system overlay (e.g. volume slider, toast, shade) over tracked app — ignore
+                return
+            }
             val prevApp = currentTrackedApp
             val deductFrom = lastDeductionTime
             if (prevApp != null) {
@@ -123,6 +147,13 @@ class AppWatcherService : AccessibilityService() {
                 }
             }
         } else {
+            // Check if root active window is still the tracked app (e.g. transient dialog or popup)
+            val rootPkg = try { rootInActiveWindow?.packageName?.toString() } catch (e: Exception) { null }
+            if (rootPkg != null && (rootPkg == currentTrackedApp || rootPkg in IGNORED_PACKAGES || isInputMethod(rootPkg))) {
+                // Active window is still the tracked app or system UI/IME — do not cancel tracking
+                return
+            }
+
             // User left a tracked app for an untracked app
             val prevApp = currentTrackedApp
             val deductFrom = lastDeductionTime
