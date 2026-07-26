@@ -6,6 +6,7 @@ import { StepWelcome } from '../components/onboarding/StepWelcome';
 import { StepBudget } from '../components/onboarding/StepBudget';
 import { StepAccessibility } from '../components/onboarding/StepAccessibility';
 import { StepBattery } from '../components/onboarding/StepBattery';
+import { StepNotifications } from '../components/onboarding/StepNotifications';
 import { StepApps } from '../components/onboarding/StepApps';
 import { styles } from '../components/onboarding/styles';
 
@@ -56,9 +57,9 @@ export default function OnboardingScreen() {
     }
   }, [step]);
 
-  // Step 5 (Apps) fetch list
+  // Step 6 (Apps) fetch list
   useEffect(() => {
-    if (step === 5) {
+    if (step === 6) {
       setLoadingApps(true);
       store.fetchInstalledApps()
         .then(() => store.fetchTrackedApps())
@@ -84,7 +85,7 @@ export default function OnboardingScreen() {
 
   const renderDotIndicator = () => (
     <View style={styles.indicatorContainer}>
-      {[1, 2, 3, 4, 5].map((i) => (
+      {[1, 2, 3, 4, 5, 6].map((i) => (
         <View
           key={i}
           style={[
@@ -110,7 +111,8 @@ export default function OnboardingScreen() {
           {step === 2 && <StepBudget onNext={() => setStep(3)} />}
           {step === 3 && <StepAccessibility />}
           {step === 4 && <StepBattery onNext={() => setStep(5)} />}
-          {step === 5 && (
+          {step === 5 && <StepNotifications onNext={() => setStep(6)} />}
+          {step === 6 && (
             <StepApps
               searchQuery={searchQuery}
               setSearchQuery={setSearchQuery}
