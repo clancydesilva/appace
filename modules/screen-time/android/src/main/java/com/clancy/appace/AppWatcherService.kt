@@ -1,4 +1,4 @@
-﻿package com.clancy.appace
+package com.clancy.appace
 
 import android.accessibilityservice.AccessibilityService
 import android.app.NotificationManager
@@ -136,35 +136,48 @@ class AppWatcherService : AccessibilityService() {
             return
         }
 
+        var tickCount = 0
+        var lastKnownBalance = repo.getBalance().balanceSeconds
+
         while (currentTrackedApp == pkg && currentCoroutineContext().isActive) {
-            delay(5000)
+            delay(1000)
             if (currentTrackedApp != pkg || !currentCoroutineContext().isActive) break
 
             if (!repo.isWithinWindow()) {
+                // Outside window — reset baseline, don't deduct or count
                 lastDeductionTime = SystemClock.elapsedRealtime()
+                tickCount = 0
                 continue
             }
 
-            val now = SystemClock.elapsedRealtime()
-            val elapsed = (now - lastDeductionTime) / 1000
-            if (elapsed > 0) {
-                repo.deductIfInWindow(elapsed)
-                lastDeductionTime = now
+            tickCount++
+
+            // Every 5 seconds: real DB deduction + sync balance
+            if (tickCount >= 5) {
+                tickCount = 0
+                val now = SystemClock.elapsedRealtime()
+                val elapsed = (now - lastDeductionTime) / 1000
+                if (elapsed > 0) {
+                    repo.deductIfInWindow(elapsed)
+                    lastDeductionTime = now
+                }
+                lastKnownBalance = repo.getBalance().balanceSeconds
+                TelemetryLogger.log(applicationContext, "SCREEN_TICK", "Tracked: $pkg, Balance: ${lastKnownBalance}s")
+
+                if (!repo.hasTimeRemaining() && repo.isWithinWindow()) {
+                    TelemetryLogger.log(applicationContext, "BLOCK", "Active limit hit inside $pkg (0s remaining)")
+                    cancelTrackingNotification()
+                    launchTimesUpScreen()
+                    currentTrackedApp = null
+                    break
+                }
             }
 
-            val balance = repo.getBalance().balanceSeconds
-            TelemetryLogger.log(applicationContext, "SCREEN_TICK", "Tracked: $pkg, Balance: ${balance}s")
-
-            // Update live notification with new balance
-            withContext(Dispatchers.Main) { updateTrackingNotification(pkg, balance) }
-
-            if (!repo.hasTimeRemaining() && repo.isWithinWindow()) {
-                TelemetryLogger.log(applicationContext, "BLOCK", "Active limit hit inside $pkg (0s remaining)")
-                cancelTrackingNotification()
-                launchTimesUpScreen()
-                currentTrackedApp = null
-                break
-            }
+            // Every second: project balance by subtracting elapsed time since last deduction
+            // This gives a smooth live countdown without hitting the DB every second
+            val elapsedSinceDeduct = (SystemClock.elapsedRealtime() - lastDeductionTime) / 1000
+            val projected = maxOf(0L, lastKnownBalance - elapsedSinceDeduct)
+            withContext(Dispatchers.Main) { updateTrackingNotification(pkg, projected) }
         }
     }
 
