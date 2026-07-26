@@ -15,18 +15,26 @@ class ForegroundService : Service() {
 
     companion object {
         const val CHANNEL_ID = "appace_channel"
+        const val TRACKING_CHANNEL_ID = "appace_tracking"
+        const val TRACKING_NOTIFICATION_ID = 2
     }
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     override fun onCreate() {
         super.onCreate()
-        val channel = NotificationChannel(
-            CHANNEL_ID,
-            "Appace",
-            NotificationManager.IMPORTANCE_LOW  // low = no sound, no popup
+        val nm = getSystemService(NotificationManager::class.java)
+        // Silent background channel for the mandatory foreground service notification
+        nm.createNotificationChannel(
+            NotificationChannel(CHANNEL_ID, "Appace", NotificationManager.IMPORTANCE_LOW)
         )
-        getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+        // High-priority channel for the live tracking notification (shows in status bar)
+        nm.createNotificationChannel(
+            NotificationChannel(TRACKING_CHANNEL_ID, "Live Balance", NotificationManager.IMPORTANCE_HIGH).apply {
+                description = "Shows remaining balance while a tracked app is in use"
+                setShowBadge(false)
+            }
+        )
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {

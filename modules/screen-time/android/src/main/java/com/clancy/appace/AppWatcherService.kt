@@ -1,34 +1,37 @@
 ﻿package com.clancy.appace
 
 import android.accessibilityservice.AccessibilityService
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Intent
 import android.content.SharedPreferences
 import android.os.SystemClock
 import android.view.accessibility.AccessibilityEvent
 import android.view.inputmethod.InputMethodManager
+import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.*
 
 class AppWatcherService : AccessibilityService() {
     private val repo by lazy { BalanceRepository(this) }
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val nm by lazy { getSystemService(NotificationManager::class.java) }
 
-    // Fix #4: @Volatile ensures writes from IO coroutines are visible to the event thread
     @Volatile private var currentTrackedApp: String? = null
     @Volatile private var lastDeductionTime: Long = 0
     @Volatile private var activeTrackingJob: Job? = null
 
-    // Fix #8: Tracked apps cached in memory — avoids SharedPrefs disk I/O on every event
+    // Fix #8: Tracked apps cached in memory
     @Volatile private var cachedTrackedApps: Set<String>? = null
     private val prefListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         if (key == "tracked_apps") cachedTrackedApps = null
     }
 
-    // Fix #9a: Input method packages cached with a 60s TTL — avoids repeated IPC on every event
+    // Fix #9a: Input method packages cached with 60s TTL
     @Volatile private var cachedInputMethods: Set<String> = emptySet()
     @Volatile private var inputMethodCacheTime: Long = 0
     private val INPUT_METHOD_CACHE_TTL_MS = 60_000L
 
-    // Fix #9b: isTopLevelApp results cached indefinitely per package — PM IPC is expensive
+    // Fix #9b: isTopLevelApp results cached per package
     private val topLevelCache = HashMap<String, Boolean>()
 
     private val LAUNCHER_PACKAGES by lazy {
@@ -45,7 +48,6 @@ class AppWatcherService : AccessibilityService() {
     private fun getPrefs(): SharedPreferences =
         getSharedPreferences("appace_prefs", MODE_PRIVATE)
 
-    // Fix #8: Memory-cached — only reads disk on first call or after tracked_apps pref changes
     private fun getTrackedApps(): Set<String> {
         cachedTrackedApps?.let { return it }
         val fresh = getPrefs().getStringSet("tracked_apps", emptySet()) ?: emptySet()
@@ -53,7 +55,6 @@ class AppWatcherService : AccessibilityService() {
         return fresh
     }
 
-    // Fix #9a: Cache-backed input method check — refreshed every 60 seconds
     private fun isInputMethod(pkg: String): Boolean {
         val now = SystemClock.elapsedRealtime()
         if (now - inputMethodCacheTime > INPUT_METHOD_CACHE_TTL_MS) {
@@ -66,7 +67,6 @@ class AppWatcherService : AccessibilityService() {
         return pkg in cachedInputMethods
     }
 
-    // Fix #9b: Cache-backed top-level app check — result stored per package, never evicted
     private fun isTopLevelApp(pkg: String): Boolean {
         if (pkg in LAUNCHER_PACKAGES) return true
         topLevelCache[pkg]?.let { return it }
@@ -77,20 +77,60 @@ class AppWatcherService : AccessibilityService() {
         return result
     }
 
-    // Fix #3: Uses repo.deductIfInWindow() — atomic window-check + deduct, no TOCTOU race
+    // Fix #3: Atomic window-check + deduct
     private suspend fun deductElapsedTime(snapshotTime: Long): Long {
         val now = SystemClock.elapsedRealtime()
         val elapsedSeconds = (now - snapshotTime) / 1000
-        if (elapsedSeconds > 0) {
-            repo.deductIfInWindow(elapsedSeconds)
-        }
+        if (elapsedSeconds > 0) repo.deductIfInWindow(elapsedSeconds)
         return elapsedSeconds
     }
 
-    // Shared drain loop — runs inside a cancellable coroutine job
+    // --- Live balance notification ---
+
+    private fun formatBalance(seconds: Long): String {
+        if (seconds <= 0) return "0s remaining"
+        val m = seconds / 60
+        val s = seconds % 60
+        return if (m > 0) "${m}m ${s}s remaining" else "${s}s remaining"
+    }
+
+    private fun appLabel(pkg: String): String =
+        try { packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString() }
+        catch (e: Exception) { pkg }
+
+    private fun postTrackingNotification(pkg: String, balanceSeconds: Long) {
+        val tapIntent = packageManager.getLaunchIntentForPackage(packageName)?.apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        }
+        val pi = tapIntent?.let {
+            PendingIntent.getActivity(this, 0, it, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        }
+        val notification = NotificationCompat.Builder(this, ForegroundService.TRACKING_CHANNEL_ID)
+            .setContentTitle(appLabel(pkg))
+            .setContentText(formatBalance(balanceSeconds))
+            .setSmallIcon(applicationInfo.icon)
+            .setOngoing(true)           // cannot be swiped away by user
+            .setOnlyAlertOnce(true)     // no sound/vibration on updates
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .apply { pi?.let { setContentIntent(it) } }
+            .build()
+        nm.notify(ForegroundService.TRACKING_NOTIFICATION_ID, notification)
+    }
+
+    private fun updateTrackingNotification(pkg: String, balanceSeconds: Long) {
+        postTrackingNotification(pkg, balanceSeconds)   // re-posting updates content
+    }
+
+    private fun cancelTrackingNotification() {
+        nm.cancel(ForegroundService.TRACKING_NOTIFICATION_ID)
+    }
+
+    // --- Drain loop ---
+
     private suspend fun runTrackingLoop(pkg: String) {
         if (!repo.hasTimeRemaining() && repo.isWithinWindow()) {
             TelemetryLogger.log(applicationContext, "BLOCK", "Redirected $pkg (0s remaining)")
+            cancelTrackingNotification()
             launchTimesUpScreen()
             currentTrackedApp = null
             return
@@ -115,8 +155,12 @@ class AppWatcherService : AccessibilityService() {
             val balance = repo.getBalance().balanceSeconds
             TelemetryLogger.log(applicationContext, "SCREEN_TICK", "Tracked: $pkg, Balance: ${balance}s")
 
+            // Update live notification with new balance
+            withContext(Dispatchers.Main) { updateTrackingNotification(pkg, balance) }
+
             if (!repo.hasTimeRemaining() && repo.isWithinWindow()) {
                 TelemetryLogger.log(applicationContext, "BLOCK", "Active limit hit inside $pkg (0s remaining)")
+                cancelTrackingNotification()
                 launchTimesUpScreen()
                 currentTrackedApp = null
                 break
@@ -136,6 +180,7 @@ class AppWatcherService : AccessibilityService() {
             if (prevApp != null) {
                 currentTrackedApp = null
                 activeTrackingJob?.cancel()
+                cancelTrackingNotification()
                 scope.launch {
                     val secs = deductElapsedTime(deductFrom)
                     val balance = repo.getBalance().balanceSeconds
@@ -156,6 +201,9 @@ class AppWatcherService : AccessibilityService() {
             currentTrackedApp = pkg
             lastDeductionTime = SystemClock.elapsedRealtime()
 
+            // Cancel previous app's notification immediately on switch
+            if (prevApp != null && prevApp != pkg) cancelTrackingNotification()
+
             activeTrackingJob?.cancel()
             activeTrackingJob = scope.launch {
                 if (prevApp != null && prevApp != pkg) {
@@ -164,6 +212,11 @@ class AppWatcherService : AccessibilityService() {
                     TelemetryLogger.log(applicationContext, "DEDUCT", "Switched $prevApp -> $pkg, deducted ${secs}s, Balance: ${balance}s")
                     lastDeductionTime = SystemClock.elapsedRealtime()
                 }
+
+                // Post notification for new tracked app
+                val initialBalance = repo.getBalance().balanceSeconds
+                withContext(Dispatchers.Main) { postTrackingNotification(pkg, initialBalance) }
+
                 runTrackingLoop(pkg)
             }
         } else {
@@ -174,6 +227,7 @@ class AppWatcherService : AccessibilityService() {
             if (prevApp != null) {
                 currentTrackedApp = null
                 activeTrackingJob?.cancel()
+                cancelTrackingNotification()
                 scope.launch {
                     val secs = deductElapsedTime(deductFrom)
                     val balance = repo.getBalance().balanceSeconds
@@ -200,22 +254,20 @@ class AppWatcherService : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
-        // Fix #8: Register listener to invalidate tracked apps cache when prefs change
         getPrefs().registerOnSharedPreferenceChangeListener(prefListener)
 
-        // Fix #10/#5: Capture foreground package on main thread — rootInActiveWindow requires it
         val foregroundPkg = try { rootInActiveWindow?.packageName?.toString() } catch (e: Exception) { null }
 
         scope.launch {
             TelemetryLogger.log(applicationContext, "SERVICE_START", "AppWatcherService accessibility active")
             startForegroundServiceIfNeeded()
 
-            // Fix #10: If a tracked app was already open when service (re)connected, start draining immediately.
-            // Without this, the service would be blind until the user switches apps.
             if (foregroundPkg != null && foregroundPkg in getTrackedApps()) {
                 TelemetryLogger.log(applicationContext, "SERVICE_START", "Resumed tracking $foregroundPkg on reconnect")
                 currentTrackedApp = foregroundPkg
                 lastDeductionTime = SystemClock.elapsedRealtime()
+                val initialBalance = repo.getBalance().balanceSeconds
+                withContext(Dispatchers.Main) { postTrackingNotification(foregroundPkg, initialBalance) }
                 activeTrackingJob?.cancel()
                 activeTrackingJob = scope.launch { runTrackingLoop(foregroundPkg) }
             }
@@ -228,15 +280,13 @@ class AppWatcherService : AccessibilityService() {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             putExtra("route", "/timesup")
         }
-        if (intent != null) {
-            startActivity(intent)
-        }
+        if (intent != null) startActivity(intent)
     }
 
     override fun onInterrupt() {}
 
     override fun onDestroy() {
-        // Fix #8: Unregister pref listener to avoid memory leak
+        cancelTrackingNotification()
         getPrefs().unregisterOnSharedPreferenceChangeListener(prefListener)
         Thread {
             runBlocking {
