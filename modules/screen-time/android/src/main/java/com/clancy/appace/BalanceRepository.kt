@@ -60,8 +60,19 @@ class BalanceRepository(private val context: Context) {
 
     suspend fun deductSeconds(seconds: Long) = withContext(Dispatchers.IO) {
         mutex.withLock {
-            val b = getBalance()
+            val b = dao.getBalance() ?: createDefaultBalance()
             dao.upsert(b.copy(balanceSeconds = maxOf(0, b.balanceSeconds - seconds)))
+        }
+    }
+
+    // Fix #3: Atomically checks window AND deducts in one mutex lock — no TOCTOU race
+    suspend fun deductIfInWindow(seconds: Long) = withContext(Dispatchers.IO) {
+        mutex.withLock {
+            val b = dao.getBalance() ?: createDefaultBalance()
+            val hour = getCurrentDateTime().hour
+            if (hour >= b.windowStartHour && hour < b.windowEndHour) {
+                dao.upsert(b.copy(balanceSeconds = maxOf(0, b.balanceSeconds - seconds)))
+            }
         }
     }
 

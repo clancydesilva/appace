@@ -1,4 +1,4 @@
-package com.clancy.appace
+﻿package com.clancy.appace
 
 import android.accessibilityservice.AccessibilityService
 import android.content.Intent
@@ -11,9 +11,25 @@ import kotlinx.coroutines.*
 class AppWatcherService : AccessibilityService() {
     private val repo by lazy { BalanceRepository(this) }
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private var currentTrackedApp: String? = null
-    private var lastDeductionTime: Long = 0
-    private var activeTrackingJob: Job? = null
+
+    // Fix #4: @Volatile ensures writes from IO coroutines are visible to the event thread
+    @Volatile private var currentTrackedApp: String? = null
+    @Volatile private var lastDeductionTime: Long = 0
+    @Volatile private var activeTrackingJob: Job? = null
+
+    // Fix #8: Tracked apps cached in memory — avoids SharedPrefs disk I/O on every event
+    @Volatile private var cachedTrackedApps: Set<String>? = null
+    private val prefListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (key == "tracked_apps") cachedTrackedApps = null
+    }
+
+    // Fix #9a: Input method packages cached with a 60s TTL — avoids repeated IPC on every event
+    @Volatile private var cachedInputMethods: Set<String> = emptySet()
+    @Volatile private var inputMethodCacheTime: Long = 0
+    private val INPUT_METHOD_CACHE_TTL_MS = 60_000L
+
+    // Fix #9b: isTopLevelApp results cached indefinitely per package — PM IPC is expensive
+    private val topLevelCache = HashMap<String, Boolean>()
 
     private val LAUNCHER_PACKAGES by lazy {
         setOf(
@@ -26,46 +42,94 @@ class AppWatcherService : AccessibilityService() {
         )
     }
 
+    private fun getPrefs(): SharedPreferences =
+        getSharedPreferences("appace_prefs", MODE_PRIVATE)
+
+    // Fix #8: Memory-cached — only reads disk on first call or after tracked_apps pref changes
     private fun getTrackedApps(): Set<String> {
-        val prefs: SharedPreferences = getSharedPreferences("appace_prefs", MODE_PRIVATE)
-        return prefs.getStringSet("tracked_apps", emptySet()) ?: emptySet()
+        cachedTrackedApps?.let { return it }
+        val fresh = getPrefs().getStringSet("tracked_apps", emptySet()) ?: emptySet()
+        cachedTrackedApps = fresh
+        return fresh
     }
 
+    // Fix #9a: Cache-backed input method check — refreshed every 60 seconds
     private fun isInputMethod(pkg: String): Boolean {
-        return try {
-            val imm = getSystemService(INPUT_METHOD_SERVICE) as? InputMethodManager ?: return false
-            imm.enabledInputMethodList.any { it.packageName == pkg }
-        } catch (e: Exception) {
-            false
+        val now = SystemClock.elapsedRealtime()
+        if (now - inputMethodCacheTime > INPUT_METHOD_CACHE_TTL_MS) {
+            val imm = try {
+                getSystemService(INPUT_METHOD_SERVICE) as? InputMethodManager
+            } catch (e: Exception) { null }
+            cachedInputMethods = imm?.enabledInputMethodList?.map { it.packageName }?.toSet() ?: emptySet()
+            inputMethodCacheTime = now
         }
+        return pkg in cachedInputMethods
     }
 
+    // Fix #9b: Cache-backed top-level app check — result stored per package, never evicted
     private fun isTopLevelApp(pkg: String): Boolean {
         if (pkg in LAUNCHER_PACKAGES) return true
-        return try {
+        topLevelCache[pkg]?.let { return it }
+        val result = try {
             packageManager.getLaunchIntentForPackage(pkg) != null
-        } catch (e: Exception) {
-            false
-        }
+        } catch (e: Exception) { false }
+        topLevelCache[pkg] = result
+        return result
     }
 
+    // Fix #3: Uses repo.deductIfInWindow() — atomic window-check + deduct, no TOCTOU race
     private suspend fun deductElapsedTime(snapshotTime: Long): Long {
         val now = SystemClock.elapsedRealtime()
         val elapsedSeconds = (now - snapshotTime) / 1000
-        if (elapsedSeconds > 0 && repo.isWithinWindow()) {
-            repo.deductSeconds(elapsedSeconds)
+        if (elapsedSeconds > 0) {
+            repo.deductIfInWindow(elapsedSeconds)
         }
         return elapsedSeconds
+    }
+
+    // Shared drain loop — runs inside a cancellable coroutine job
+    private suspend fun runTrackingLoop(pkg: String) {
+        if (!repo.hasTimeRemaining() && repo.isWithinWindow()) {
+            TelemetryLogger.log(applicationContext, "BLOCK", "Redirected $pkg (0s remaining)")
+            launchTimesUpScreen()
+            currentTrackedApp = null
+            return
+        }
+
+        while (currentTrackedApp == pkg && currentCoroutineContext().isActive) {
+            delay(5000)
+            if (currentTrackedApp != pkg || !currentCoroutineContext().isActive) break
+
+            if (!repo.isWithinWindow()) {
+                lastDeductionTime = SystemClock.elapsedRealtime()
+                continue
+            }
+
+            val now = SystemClock.elapsedRealtime()
+            val elapsed = (now - lastDeductionTime) / 1000
+            if (elapsed > 0) {
+                repo.deductIfInWindow(elapsed)
+                lastDeductionTime = now
+            }
+
+            val balance = repo.getBalance().balanceSeconds
+            TelemetryLogger.log(applicationContext, "SCREEN_TICK", "Tracked: $pkg, Balance: ${balance}s")
+
+            if (!repo.hasTimeRemaining() && repo.isWithinWindow()) {
+                TelemetryLogger.log(applicationContext, "BLOCK", "Active limit hit inside $pkg (0s remaining)")
+                launchTimesUpScreen()
+                currentTrackedApp = null
+                break
+            }
+        }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
         val pkg = event.packageName?.toString() ?: return
 
-        // 1. Ignore input methods (keyboards)
         if (isInputMethod(pkg)) return
 
-        // 2. If package is launcher or appace itself (user went home or opened appace app)
         if (pkg in LAUNCHER_PACKAGES) {
             val prevApp = currentTrackedApp
             val deductFrom = lastDeductionTime
@@ -75,7 +139,7 @@ class AppWatcherService : AccessibilityService() {
                 scope.launch {
                     val secs = deductElapsedTime(deductFrom)
                     val balance = repo.getBalance().balanceSeconds
-                    TelemetryLogger.log(applicationContext, "DEDUCT", "Left to system UI/launcher from $prevApp, deducted ${secs}s, Balance: ${balance}s")
+                    TelemetryLogger.log(applicationContext, "DEDUCT", "Left to system UI from $prevApp, deducted ${secs}s, Balance: ${balance}s")
                 }
             }
             return
@@ -83,72 +147,28 @@ class AppWatcherService : AccessibilityService() {
 
         val trackedApps = getTrackedApps()
 
-        // 3. Package is a tracked application
         if (pkg in trackedApps) {
             if (pkg == currentTrackedApp) return
             startForegroundServiceIfNeeded()
             val prevApp = currentTrackedApp
             val deductFrom = lastDeductionTime
 
-            // Start tracking new app — set baseline for elapsed time measurement
             currentTrackedApp = pkg
             lastDeductionTime = SystemClock.elapsedRealtime()
 
             activeTrackingJob?.cancel()
             activeTrackingJob = scope.launch {
-                // If we switched directly from another tracked app, deduct its time first
                 if (prevApp != null && prevApp != pkg) {
                     val secs = deductElapsedTime(deductFrom)
                     val balance = repo.getBalance().balanceSeconds
                     TelemetryLogger.log(applicationContext, "DEDUCT", "Switched $prevApp -> $pkg, deducted ${secs}s, Balance: ${balance}s")
-                    // Reset baseline after deduction to avoid double-counting
                     lastDeductionTime = SystemClock.elapsedRealtime()
                 }
-
-                if (!repo.hasTimeRemaining() && repo.isWithinWindow()) {
-                    TelemetryLogger.log(applicationContext, "BLOCK", "Redirected $pkg (0s remaining)")
-                    launchTimesUpScreen()
-                    currentTrackedApp = null
-                    return@launch
-                }
-
-                // Active loop: measure & deduct actual elapsed time every ~5 seconds
-                while (currentTrackedApp == pkg && isActive) {
-                    delay(5000)
-                    if (currentTrackedApp != pkg || !isActive) break
-
-                    if (!repo.isWithinWindow()) {
-                        // Reset baseline to now to avoid retroactive deductions when window starts
-                        lastDeductionTime = SystemClock.elapsedRealtime()
-                        continue
-                    }
-
-                    val now = SystemClock.elapsedRealtime()
-                    val elapsedSeconds = (now - lastDeductionTime) / 1000
-                    if (elapsedSeconds > 0) {
-                        repo.deductSeconds(elapsedSeconds)
-                        lastDeductionTime = now
-                    }
-
-                    val balance = repo.getBalance().balanceSeconds
-                    TelemetryLogger.log(applicationContext, "SCREEN_TICK", "Tracked app: $pkg, Balance: ${balance}s")
-
-                    if (!repo.hasTimeRemaining() && repo.isWithinWindow()) {
-                        TelemetryLogger.log(applicationContext, "BLOCK", "Active limit hit inside $pkg (0s remaining)")
-                        launchTimesUpScreen()
-                        currentTrackedApp = null
-                        break
-                    }
-                }
+                runTrackingLoop(pkg)
             }
         } else {
-            // 4. Package is untracked — only stop tracking if it is a top-level app (has a launch intent)
-            if (!isTopLevelApp(pkg)) {
-                // Internal service/system component popup (e.g. gms, play services, ads) — ignore
-                return
-            }
+            if (!isTopLevelApp(pkg)) return
 
-            // User left a tracked app for a top-level untracked app
             val prevApp = currentTrackedApp
             val deductFrom = lastDeductionTime
             if (prevApp != null) {
@@ -180,9 +200,25 @@ class AppWatcherService : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
+        // Fix #8: Register listener to invalidate tracked apps cache when prefs change
+        getPrefs().registerOnSharedPreferenceChangeListener(prefListener)
+
+        // Fix #10/#5: Capture foreground package on main thread — rootInActiveWindow requires it
+        val foregroundPkg = try { rootInActiveWindow?.packageName?.toString() } catch (e: Exception) { null }
+
         scope.launch {
             TelemetryLogger.log(applicationContext, "SERVICE_START", "AppWatcherService accessibility active")
             startForegroundServiceIfNeeded()
+
+            // Fix #10: If a tracked app was already open when service (re)connected, start draining immediately.
+            // Without this, the service would be blind until the user switches apps.
+            if (foregroundPkg != null && foregroundPkg in getTrackedApps()) {
+                TelemetryLogger.log(applicationContext, "SERVICE_START", "Resumed tracking $foregroundPkg on reconnect")
+                currentTrackedApp = foregroundPkg
+                lastDeductionTime = SystemClock.elapsedRealtime()
+                activeTrackingJob?.cancel()
+                activeTrackingJob = scope.launch { runTrackingLoop(foregroundPkg) }
+            }
         }
     }
 
@@ -200,6 +236,8 @@ class AppWatcherService : AccessibilityService() {
     override fun onInterrupt() {}
 
     override fun onDestroy() {
+        // Fix #8: Unregister pref listener to avoid memory leak
+        getPrefs().unregisterOnSharedPreferenceChangeListener(prefListener)
         Thread {
             runBlocking {
                 TelemetryLogger.log(applicationContext, "SERVICE_STOP", "AppWatcherService accessibility destroyed")
