@@ -19,6 +19,7 @@ class AppWatcherService : AccessibilityService() {
     @Volatile private var currentTrackedApp: String? = null
     @Volatile private var lastDeductionTime: Long = 0
     @Volatile private var activeTrackingJob: Job? = null
+    @Volatile private var pendingCancelJob: Job? = null  // delayed notification dismissal
 
     // Fix #8: Tracked apps cached in memory
     @Volatile private var cachedTrackedApps: Set<String>? = null
@@ -116,15 +117,38 @@ class AppWatcherService : AccessibilityService() {
         nm.notify(ForegroundService.TRACKING_NOTIFICATION_ID, notification)
     }
 
-    private fun postTrackingNotification(pkg: String, balanceSeconds: Long) =
+    /**
+     * Post or update the tracking notification.
+     * Aborts any pending delayed cancellation — e.g. user re-opens tracked app within 5s grace.
+     */
+    private fun postTrackingNotification(pkg: String, balanceSeconds: Long) {
+        pendingCancelJob?.cancel()
+        pendingCancelJob = null
         buildTrackingNotification(pkg, balanceSeconds)
+    }
 
     private fun updateTrackingNotification(pkg: String, balanceSeconds: Long) =
         buildTrackingNotification(pkg, balanceSeconds)
 
-    /** Tracking flag OFF — remove notification completely */
-    private fun cancelTrackingNotification() =
-        nm.cancel(ForegroundService.TRACKING_NOTIFICATION_ID)
+    /**
+     * Cancel the tracking notification.
+     * @param delayed If true, waits 5 seconds before dismissing (grace for control panel swipe-downs).
+     *                The notification stays frozen — no timer movement — during the grace period.
+     *                If false, dismisses immediately (time-up, service destroy).
+     */
+    private fun cancelTrackingNotification(delayed: Boolean = false) {
+        pendingCancelJob?.cancel()
+        if (delayed) {
+            pendingCancelJob = scope.launch {
+                delay(5_000)
+                nm.cancel(ForegroundService.TRACKING_NOTIFICATION_ID)
+                pendingCancelJob = null
+            }
+        } else {
+            pendingCancelJob = null
+            nm.cancel(ForegroundService.TRACKING_NOTIFICATION_ID)
+        }
+    }
 
     // --- Drain loop ---
 
@@ -194,7 +218,7 @@ class AppWatcherService : AccessibilityService() {
             if (prevApp != null) {
                 currentTrackedApp = null
                 activeTrackingJob?.cancel()
-                cancelTrackingNotification()
+                cancelTrackingNotification(delayed = true)  // 5s grace — control panel swipe
                 scope.launch {
                     val secs = deductElapsedTime(deductFrom)
                     val balance = repo.getBalance().balanceSeconds
@@ -241,7 +265,7 @@ class AppWatcherService : AccessibilityService() {
             if (prevApp != null) {
                 currentTrackedApp = null
                 activeTrackingJob?.cancel()
-                cancelTrackingNotification()
+                cancelTrackingNotification(delayed = true)  // 5s grace — switched to untracked app
                 scope.launch {
                     val secs = deductElapsedTime(deductFrom)
                     val balance = repo.getBalance().balanceSeconds
