@@ -1,22 +1,73 @@
-package com.clancy.appace
+﻿package com.clancy.appace
 
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
+import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
-import android.app.PendingIntent
 import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.*
 
 class ForegroundService : Service() {
 
     companion object {
-        const val CHANNEL_ID = "appace_channel"
-        const val TRACKING_CHANNEL_ID = "appace_tracking"
-        const val TRACKING_NOTIFICATION_ID = 2
+        /** Single notification ID used for both idle and tracking states */
+        const val NOTIFICATION_ID = 1
+
+        /** Silent channel — IMPORTANCE_MIN means no status bar icon, collapsed at bottom of shade */
+        const val CHANNEL_IDLE = "appace_idle"
+
+        /** High-priority channel — shown in status bar as a live countdown */
+        const val CHANNEL_TRACKING = "appace_tracking"
+
+        /** Update the notification to show a live balance countdown while a tracked app is active */
+        fun notifyTracking(context: Context, appLabel: String, balanceSeconds: Long) {
+            val nm = context.getSystemService(NotificationManager::class.java)
+            nm.notify(NOTIFICATION_ID, buildTrackingNotification(context, appLabel, balanceSeconds))
+        }
+
+        /** Restore the notification to the silent idle state when no tracked app is active */
+        fun notifyIdle(context: Context) {
+            val nm = context.getSystemService(NotificationManager::class.java)
+            nm.notify(NOTIFICATION_ID, buildIdleNotification(context))
+        }
+
+        private fun buildIdleNotification(context: Context): Notification {
+            return NotificationCompat.Builder(context, CHANNEL_IDLE)
+                .setContentTitle("Appace")
+                .setSmallIcon(context.applicationInfo.icon)
+                .setPriority(NotificationCompat.PRIORITY_MIN)
+                .setSilent(true)
+                .build()
+        }
+
+        fun buildTrackingNotification(context: Context, appLabel: String, balanceSeconds: Long): Notification {
+            val m = balanceSeconds / 60
+            val s = balanceSeconds % 60
+            val timeText = if (m > 0) "${m}m ${s}s remaining" else "${s}s remaining"
+
+            val tapIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)?.apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            }
+            val pi = tapIntent?.let {
+                PendingIntent.getActivity(context, 0, it, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+            }
+
+            return NotificationCompat.Builder(context, CHANNEL_TRACKING)
+                .setContentTitle(appLabel)
+                .setContentText(timeText)
+                .setSmallIcon(context.applicationInfo.icon)
+                .setOngoing(true)
+                .setOnlyAlertOnce(true)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .apply { pi?.let { setContentIntent(it) } }
+                .build()
+        }
     }
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -24,13 +75,16 @@ class ForegroundService : Service() {
     override fun onCreate() {
         super.onCreate()
         val nm = getSystemService(NotificationManager::class.java)
-        // Silent background channel for the mandatory foreground service notification
+
+        // Idle channel: IMPORTANCE_MIN = no status bar icon, silent, collapsed in shade
         nm.createNotificationChannel(
-            NotificationChannel(CHANNEL_ID, "Appace", NotificationManager.IMPORTANCE_LOW)
+            NotificationChannel(CHANNEL_IDLE, "Appace", NotificationManager.IMPORTANCE_MIN).apply {
+                setShowBadge(false)
+            }
         )
-        // High-priority channel for the live tracking notification (shows in status bar)
+        // Tracking channel: IMPORTANCE_HIGH = shown in status bar as live countdown
         nm.createNotificationChannel(
-            NotificationChannel(TRACKING_CHANNEL_ID, "Live Balance", NotificationManager.IMPORTANCE_HIGH).apply {
+            NotificationChannel(CHANNEL_TRACKING, "Live Balance", NotificationManager.IMPORTANCE_HIGH).apply {
                 description = "Shows remaining balance while a tracked app is in use"
                 setShowBadge(false)
             }
@@ -38,29 +92,12 @@ class ForegroundService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val tapIntent = packageManager.getLaunchIntentForPackage(packageName)?.apply {
-            this.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-        }
-        val pendingIntent = tapIntent?.let {
-            PendingIntent.getActivity(this, 0, it, PendingIntent.FLAG_IMMUTABLE)
-        }
-
-        val notificationBuilder = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Screen Time Active")
-            .setContentText("Monitoring app usage")
-            .setSmallIcon(applicationInfo.icon)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            
-        pendingIntent?.let {
-            notificationBuilder.setContentIntent(it)
-        }
-        
-        val notification = notificationBuilder.build()
-
+        // Start foreground with the silent idle notification — replaced by countdown when tracking
+        val idleNotification = buildIdleNotification(this)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(1, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+            startForeground(NOTIFICATION_ID, idleNotification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
         } else {
-            startForeground(1, notification)
+            startForeground(NOTIFICATION_ID, idleNotification)
         }
 
         scope.launch {

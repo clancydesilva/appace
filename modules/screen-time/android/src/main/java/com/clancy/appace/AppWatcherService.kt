@@ -1,20 +1,16 @@
 package com.clancy.appace
 
 import android.accessibilityservice.AccessibilityService
-import android.app.NotificationManager
-import android.app.PendingIntent
 import android.content.Intent
 import android.content.SharedPreferences
 import android.os.SystemClock
 import android.view.accessibility.AccessibilityEvent
 import android.view.inputmethod.InputMethodManager
-import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.*
 
 class AppWatcherService : AccessibilityService() {
     private val repo by lazy { BalanceRepository(this) }
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private val nm by lazy { getSystemService(NotificationManager::class.java) }
 
     @Volatile private var currentTrackedApp: String? = null
     @Volatile private var lastDeductionTime: Long = 0
@@ -85,45 +81,20 @@ class AppWatcherService : AccessibilityService() {
         return elapsedSeconds
     }
 
-    // --- Live balance notification ---
-
-    private fun formatBalance(seconds: Long): String {
-        if (seconds <= 0) return "0s remaining"
-        val m = seconds / 60
-        val s = seconds % 60
-        return if (m > 0) "${m}m ${s}s remaining" else "${s}s remaining"
-    }
+    // --- Live balance notification (delegates to ForegroundService — single notification ID=1) ---
 
     private fun appLabel(pkg: String): String =
         try { packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString() }
         catch (e: Exception) { pkg }
 
-    private fun postTrackingNotification(pkg: String, balanceSeconds: Long) {
-        val tapIntent = packageManager.getLaunchIntentForPackage(packageName)?.apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-        }
-        val pi = tapIntent?.let {
-            PendingIntent.getActivity(this, 0, it, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-        }
-        val notification = NotificationCompat.Builder(this, ForegroundService.TRACKING_CHANNEL_ID)
-            .setContentTitle(appLabel(pkg))
-            .setContentText(formatBalance(balanceSeconds))
-            .setSmallIcon(applicationInfo.icon)
-            .setOngoing(true)           // cannot be swiped away by user
-            .setOnlyAlertOnce(true)     // no sound/vibration on updates
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .apply { pi?.let { setContentIntent(it) } }
-            .build()
-        nm.notify(ForegroundService.TRACKING_NOTIFICATION_ID, notification)
-    }
+    private fun postTrackingNotification(pkg: String, balanceSeconds: Long) =
+        ForegroundService.notifyTracking(applicationContext, appLabel(pkg), balanceSeconds)
 
-    private fun updateTrackingNotification(pkg: String, balanceSeconds: Long) {
-        postTrackingNotification(pkg, balanceSeconds)   // re-posting updates content
-    }
+    private fun updateTrackingNotification(pkg: String, balanceSeconds: Long) =
+        ForegroundService.notifyTracking(applicationContext, appLabel(pkg), balanceSeconds)
 
-    private fun cancelTrackingNotification() {
-        nm.cancel(ForegroundService.TRACKING_NOTIFICATION_ID)
-    }
+    private fun cancelTrackingNotification() =
+        ForegroundService.notifyIdle(applicationContext)
 
     // --- Drain loop ---
 
