@@ -27,13 +27,28 @@ class AppWatcherService : AccessibilityService() {
         if (key == "tracked_apps") cachedTrackedApps = null
     }
 
-    // Fix #9a: Input method packages cached with 60s TTL
+    // Fix #9a: Input method packages cached with 60s TTL + permanent accumulator
+    // The accumulator (knownImePackages) closes the window where a brief IMM-list gap during a
+    // keyboard-open transition could cause a package to slip through as a false app-switch.
+    // Once a package is ever identified as an IME it stays flagged for this service lifetime.
     @Volatile private var cachedInputMethods: Set<String> = emptySet()
     @Volatile private var inputMethodCacheTime: Long = 0
     private val INPUT_METHOD_CACHE_TTL_MS = 60_000L
+    private val knownImePackages = mutableSetOf<String>()
 
     // Fix #9b: isTopLevelApp results cached per package
     private val topLevelCache = HashMap<String, Boolean>()
+
+    // OEM / system-service packages that fire TYPE_WINDOW_STATE_CHANGED spuriously.
+    // These are a true no-op — return immediately with zero state change.
+    private val SYSTEM_NOISE_PACKAGES by lazy {
+        setOf(
+            "com.wssyncmldm",                     // Samsung firmware / OTA update popup
+            "com.samsung.android.MtpApplication",  // Samsung MTP file-transfer dialog
+            "com.sec.android.easyMover",           // Samsung Smart Switch overlay
+            "com.android.phone"                    // Telephony / USSD system dialogs
+        )
+    }
 
     private val LAUNCHER_PACKAGES by lazy {
         setOf(
@@ -57,12 +72,16 @@ class AppWatcherService : AccessibilityService() {
     }
 
     private fun isInputMethod(pkg: String): Boolean {
+        // Fast path: package was already confirmed as an IME in a prior event
+        if (pkg in knownImePackages) return true
         val now = SystemClock.elapsedRealtime()
         if (now - inputMethodCacheTime > INPUT_METHOD_CACHE_TTL_MS) {
             val imm = try {
                 getSystemService(INPUT_METHOD_SERVICE) as? InputMethodManager
             } catch (e: Exception) { null }
-            cachedInputMethods = imm?.enabledInputMethodList?.map { it.packageName }?.toSet() ?: emptySet()
+            val fresh = imm?.enabledInputMethodList?.map { it.packageName }?.toSet() ?: emptySet()
+            cachedInputMethods = fresh
+            knownImePackages.addAll(fresh)  // accumulate — never shrinks during service lifetime
             inputMethodCacheTime = now
         }
         return pkg in cachedInputMethods
@@ -209,6 +228,15 @@ class AppWatcherService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
         val pkg = event.packageName?.toString() ?: return
+
+        // Fix: OEM system-service popups — true no-op, no state change at all
+        if (pkg in SYSTEM_NOISE_PACKAGES) return
+
+        // Fix: In-app browser Custom Tabs (Chrome, Firefox, Samsung Browser, etc.).
+        // CustomTab activities fire TYPE_WINDOW_STATE_CHANGED from the tracked app's process
+        // but are a continuation of in-app browsing, not a genuine app switch.
+        val className = event.className?.toString() ?: ""
+        if (className.contains("CustomTab", ignoreCase = true)) return
 
         if (isInputMethod(pkg)) return
 
