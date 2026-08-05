@@ -228,19 +228,29 @@ class AppWatcherService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
         val pkg = event.packageName?.toString() ?: return
+        val className = event.className?.toString() ?: ""
+
+        // Single-evaluation RAW_EVENT logging — every condition is checked exactly once.
+        // logRaw() is called at the point where the branch is actually taken, so the log
+        // entry is guaranteed to reflect the real behaviour (no classifyEvent() double-read).
+        val logClass = className.substringAfterLast('.').take(40)
+        fun logRaw(branch: String) = scope.launch {
+            TelemetryLogger.log(applicationContext, "RAW_EVENT",
+                "pkg=$pkg | class=$logClass | branch=$branch")
+        }
 
         // Fix: OEM system-service popups — true no-op, no state change at all
-        if (pkg in SYSTEM_NOISE_PACKAGES) return
+        if (pkg in SYSTEM_NOISE_PACKAGES) { logRaw("system-noise"); return }
 
         // Fix: In-app browser Custom Tabs (Chrome, Firefox, Samsung Browser, etc.).
-        // CustomTab activities fire TYPE_WINDOW_STATE_CHANGED from the tracked app's process
-        // but are a continuation of in-app browsing, not a genuine app switch.
-        val className = event.className?.toString() ?: ""
-        if (className.contains("CustomTab", ignoreCase = true)) return
+        // CustomTab activities fire TYPE_WINDOW_STATE_CHANGED but are a continuation of
+        // in-app browsing, not a genuine app switch.
+        if (className.contains("CustomTab", ignoreCase = true)) { logRaw("custom-tab"); return }
 
-        if (isInputMethod(pkg)) return
+        if (isInputMethod(pkg)) { logRaw("ime"); return }
 
         if (pkg in LAUNCHER_PACKAGES) {
+            logRaw("launcher")
             val prevApp = currentTrackedApp
             val deductFrom = lastDeductionTime
             if (prevApp != null) {
@@ -259,7 +269,8 @@ class AppWatcherService : AccessibilityService() {
         val trackedApps = getTrackedApps()
 
         if (pkg in trackedApps) {
-            if (pkg == currentTrackedApp) return
+            if (pkg == currentTrackedApp) { logRaw("tracked-same"); return }
+            logRaw("tracked-switch")
             startForegroundServiceIfNeeded()
             val prevApp = currentTrackedApp
             val deductFrom = lastDeductionTime
@@ -286,7 +297,8 @@ class AppWatcherService : AccessibilityService() {
                 runTrackingLoop(pkg)
             }
         } else {
-            if (!isTopLevelApp(pkg)) return
+            if (!isTopLevelApp(pkg)) { logRaw("ignored"); return }
+            logRaw("untracked-toplevel")
 
             val prevApp = currentTrackedApp
             val deductFrom = lastDeductionTime
@@ -302,6 +314,7 @@ class AppWatcherService : AccessibilityService() {
             }
         }
     }
+
 
     private fun startForegroundServiceIfNeeded() {
         try {
