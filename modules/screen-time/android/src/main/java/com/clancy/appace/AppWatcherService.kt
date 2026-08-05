@@ -20,6 +20,7 @@ class AppWatcherService : AccessibilityService() {
     @Volatile private var lastDeductionTime: Long = 0
     @Volatile private var activeTrackingJob: Job? = null
     @Volatile private var pendingCancelJob: Job? = null  // delayed notification dismissal
+    @Volatile private var graceJob: Job? = null          // 5s grace before wiping tracking state
 
     // Fix #8: Tracked apps cached in memory
     @Volatile private var cachedTrackedApps: Set<String>? = null
@@ -252,15 +253,19 @@ class AppWatcherService : AccessibilityService() {
         if (pkg in LAUNCHER_PACKAGES) {
             logRaw("launcher")
             val prevApp = currentTrackedApp
-            val deductFrom = lastDeductionTime
-            if (prevApp != null) {
-                currentTrackedApp = null
-                activeTrackingJob?.cancel()
+            if (prevApp != null && graceJob == null) {
+                val deductFrom = lastDeductionTime
                 cancelTrackingNotification(delayed = true)  // 5s grace — control panel swipe
-                scope.launch {
-                    val secs = deductElapsedTime(deductFrom)
-                    val balance = repo.getBalance().balanceSeconds
-                    TelemetryLogger.log(applicationContext, "DEDUCT", "Left to system UI from $prevApp, deducted ${secs}s, Balance: ${balance}s")
+                graceJob = scope.launch {
+                    delay(5_000)
+                    if (currentTrackedApp == prevApp) {
+                        currentTrackedApp = null
+                        activeTrackingJob?.cancel()
+                        val secs = deductElapsedTime(deductFrom)
+                        val balance = repo.getBalance().balanceSeconds
+                        TelemetryLogger.log(applicationContext, "DEDUCT", "Left to system UI from $prevApp after 5s grace, deducted ${secs}s, Balance: ${balance}s")
+                    }
+                    graceJob = null
                 }
             }
             return
@@ -269,6 +274,16 @@ class AppWatcherService : AccessibilityService() {
         val trackedApps = getTrackedApps()
 
         if (pkg in trackedApps) {
+            if (graceJob != null && currentTrackedApp == pkg) {
+                graceJob?.cancel()
+                graceJob = null
+                logRaw("grace-restored")
+                return
+            }
+
+            graceJob?.cancel()
+            graceJob = null
+
             if (pkg == currentTrackedApp) { logRaw("tracked-same"); return }
             logRaw("tracked-switch")
             startForegroundServiceIfNeeded()
@@ -301,15 +316,19 @@ class AppWatcherService : AccessibilityService() {
             logRaw("untracked-toplevel")
 
             val prevApp = currentTrackedApp
-            val deductFrom = lastDeductionTime
-            if (prevApp != null) {
-                currentTrackedApp = null
-                activeTrackingJob?.cancel()
+            if (prevApp != null && graceJob == null) {
+                val deductFrom = lastDeductionTime
                 cancelTrackingNotification(delayed = true)  // 5s grace — switched to untracked app
-                scope.launch {
-                    val secs = deductElapsedTime(deductFrom)
-                    val balance = repo.getBalance().balanceSeconds
-                    TelemetryLogger.log(applicationContext, "DEDUCT", "Left $prevApp for $pkg, deducted ${secs}s, Balance: ${balance}s")
+                graceJob = scope.launch {
+                    delay(5_000)
+                    if (currentTrackedApp == prevApp) {
+                        currentTrackedApp = null
+                        activeTrackingJob?.cancel()
+                        val secs = deductElapsedTime(deductFrom)
+                        val balance = repo.getBalance().balanceSeconds
+                        TelemetryLogger.log(applicationContext, "DEDUCT", "Left $prevApp for $pkg after 5s grace, deducted ${secs}s, Balance: ${balance}s")
+                    }
+                    graceJob = null
                 }
             }
         }
