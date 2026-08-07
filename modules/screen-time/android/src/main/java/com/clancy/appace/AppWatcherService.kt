@@ -223,6 +223,23 @@ class AppWatcherService : AccessibilityService() {
             val elapsedSinceDeduct = (SystemClock.elapsedRealtime() - lastDeductionTime) / 1000
             val projected = maxOf(0L, lastKnownBalance - elapsedSinceDeduct)
             withContext(Dispatchers.Main) { updateTrackingNotification(pkg, projected) }
+
+            // Fix: Instant block when projected time hits 0s (no 5s tick delay or missing check)
+            if (projected <= 0L) {
+                val now = SystemClock.elapsedRealtime()
+                val elapsed = (now - lastDeductionTime) / 1000
+                if (elapsed > 0) {
+                    repo.deductIfInWindow(elapsed)
+                    lastDeductionTime = now
+                }
+                if (!repo.hasTimeRemaining() && repo.isWithinWindow()) {
+                    TelemetryLogger.log(applicationContext, "BLOCK", "Active limit hit inside $pkg (0s projected remaining)")
+                    cancelTrackingNotification()
+                    launchTimesUpScreen()
+                    currentTrackedApp = null
+                    break
+                }
+            }
         }
     }
 
@@ -255,7 +272,10 @@ class AppWatcherService : AccessibilityService() {
             val prevApp = currentTrackedApp
             if (prevApp != null && graceJob == null) {
                 val deductFrom = lastDeductionTime
-                cancelTrackingNotification(delayed = true)  // 5s grace — control panel swipe
+                // Only delay-cancel notification if leaving for actual home launcher, not systemui shade
+                if (pkg != "com.android.systemui") {
+                    cancelTrackingNotification(delayed = true)
+                }
                 graceJob = scope.launch {
                     delay(5_000)
                     if (currentTrackedApp == prevApp) {
@@ -263,7 +283,7 @@ class AppWatcherService : AccessibilityService() {
                         activeTrackingJob?.cancel()
                         val secs = deductElapsedTime(deductFrom)
                         val balance = repo.getBalance().balanceSeconds
-                        TelemetryLogger.log(applicationContext, "DEDUCT", "Left to system UI from $prevApp after 5s grace, deducted ${secs}s, Balance: ${balance}s")
+                        TelemetryLogger.log(applicationContext, "DEDUCT", "Left to $pkg from $prevApp after 5s grace, deducted ${secs}s, Balance: ${balance}s")
                     }
                     graceJob = null
                 }
