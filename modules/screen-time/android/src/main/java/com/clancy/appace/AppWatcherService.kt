@@ -28,6 +28,12 @@ class AppWatcherService : AccessibilityService() {
         if (key == "tracked_apps") cachedTrackedApps = null
     }
 
+    // Heartbeat: written every 5-second real deduction tick and on service connect.
+    // GapReconciler reads this to detect the gap window after a process death.
+    private fun persistHeartbeat() {
+        getPrefs().edit().putLong("last_heartbeat_ms", System.currentTimeMillis()).apply()
+    }
+
     // Fix #9a: Input method packages cached with 60s TTL + permanent accumulator
     // The accumulator (knownImePackages) closes the window where a brief IMM-list gap during a
     // keyboard-open transition could cause a package to slip through as a false app-switch.
@@ -205,6 +211,7 @@ class AppWatcherService : AccessibilityService() {
                 if (elapsed > 0) {
                     repo.deductIfInWindow(elapsed)
                     lastDeductionTime = now
+                    persistHeartbeat()  // Stamp wall-clock time so GapReconciler can detect gaps
                 }
                 lastKnownBalance = repo.getBalance().balanceSeconds
                 TelemetryLogger.log(applicationContext, "SCREEN_TICK", "Tracked: $pkg, Balance: ${lastKnownBalance}s")
@@ -278,6 +285,18 @@ class AppWatcherService : AccessibilityService() {
                 }
                 graceJob = scope.launch {
                     delay(5_000)
+                    // Grace-expiry check: if prevApp is still the foreground window, abort the
+                    // wipe and leave currentTrackedApp intact. runTrackingLoop is already running
+                    // independently — leaving state intact is all that's needed.
+                    // Null/stale rootInActiveWindow is treated conservatively: don't wipe.
+                    val stillForeground = try {
+                        rootInActiveWindow?.packageName?.toString() == prevApp
+                    } catch (e: Exception) { false }
+                    if (stillForeground) {
+                        logRaw("grace-extended")
+                        graceJob = null
+                        return@launch
+                    }
                     if (currentTrackedApp == prevApp) {
                         currentTrackedApp = null
                         activeTrackingJob?.cancel()
@@ -341,6 +360,15 @@ class AppWatcherService : AccessibilityService() {
                 cancelTrackingNotification(delayed = true)  // 5s grace — switched to untracked app
                 graceJob = scope.launch {
                     delay(5_000)
+                    // Grace-expiry check: same logic as the launcher path above.
+                    val stillForeground = try {
+                        rootInActiveWindow?.packageName?.toString() == prevApp
+                    } catch (e: Exception) { false }
+                    if (stillForeground) {
+                        logRaw("grace-extended")
+                        graceJob = null
+                        return@launch
+                    }
                     if (currentTrackedApp == prevApp) {
                         currentTrackedApp = null
                         activeTrackingJob?.cancel()
@@ -380,6 +408,7 @@ class AppWatcherService : AccessibilityService() {
             TelemetryLogger.log(applicationContext, "SERVICE_START", "AppWatcherService accessibility active")
             startForegroundServiceIfNeeded()
 
+            persistHeartbeat()  // Mark service alive so GapReconciler has a baseline
             if (foregroundPkg != null && foregroundPkg in getTrackedApps()) {
                 TelemetryLogger.log(applicationContext, "SERVICE_START", "Resumed tracking $foregroundPkg on reconnect")
                 currentTrackedApp = foregroundPkg
