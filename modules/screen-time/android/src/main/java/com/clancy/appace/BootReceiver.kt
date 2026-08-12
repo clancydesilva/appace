@@ -11,6 +11,8 @@ class BootReceiver : BroadcastReceiver() {
                 TelemetryLogger.log(context.applicationContext, "BOOT", "Device rebooted, starting ForegroundService")
             }.start()
             context.startForegroundService(Intent(context, ForegroundService::class.java))
+            // Re-schedule WorkManager tick — not guaranteed to survive reboot on all OEMs.
+            AccrualWorker.schedule(context)
         }
     }
 }
