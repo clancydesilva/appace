@@ -3,6 +3,10 @@
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/>
   <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
   <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+  <!-- Required by GapReconciler to query UsageStatsManager for gap attribution.
+       User must grant via Settings → Usage Access. App soft-fails if not granted. -->
+  <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS"
+      tools:ignore="ProtectedPermissions"/>
   <queries>
     <!-- Allows querying apps that appear in the device launcher (for app selection screen) -->
     <intent>
