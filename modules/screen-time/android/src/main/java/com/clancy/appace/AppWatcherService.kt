@@ -250,32 +250,6 @@ class AppWatcherService : AccessibilityService() {
         }
     }
 
-    private fun isInputMethod(pkg: String): Boolean {
-        return try {
-            val imm = getSystemService(INPUT_METHOD_SERVICE) as? InputMethodManager ?: return false
-            imm.enabledInputMethodList.any { it.packageName == pkg }
-        } catch (e: Exception) {
-            false
-        }
-    }
-
-    private fun isTopLevelApp(pkg: String): Boolean {
-        if (pkg in LAUNCHER_PACKAGES) return true
-        return try {
-            packageManager.getLaunchIntentForPackage(pkg) != null
-        } catch (e: Exception) {
-            false
-        }
-    }
-
-    private suspend fun deductElapsedTime(snapshotTime: Long): Long {
-        val now = SystemClock.elapsedRealtime()
-        val elapsedSeconds = (now - snapshotTime) / 1000
-        if (elapsedSeconds > 0 && repo.isWithinWindow()) {
-            repo.deductSeconds(elapsedSeconds)
-        }
-        return elapsedSeconds
-    }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
