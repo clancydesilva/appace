@@ -422,7 +422,9 @@ class AppWatcherService : AccessibilityService() {
     }
 
     private fun launchTimesUpScreen() {
-        performGlobalAction(GLOBAL_ACTION_HOME)
+        // Option A: launch /timesup directly over the tracked app — no Home Screen flash.
+        // ForegroundService keeps the process warm so this should be near-instant.
+        // If the transition still feels laggy we will add the ≤5s pre-warm (Option B).
         val intent = packageManager.getLaunchIntentForPackage(packageName)?.apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             putExtra("route", "/timesup")
