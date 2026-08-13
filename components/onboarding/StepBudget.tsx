@@ -44,11 +44,7 @@ export function StepBudget({ onNext }: Props) {
     const accrual = Math.max(1, Math.min(60, parseInt(accrualMinsStr) || 5));
     const interval = Math.max(1, Math.min(24, parseInt(accrualIntervalStr) || 1));
 
-    await store.setBudgetType(budgetType as BudgetType);
-    await store.setWindowHours(start, end);
-    await store.setOpeningBalance(opening);
-    await store.setHourlyAccrual(accrual);
-    await store.setAccrualInterval(interval);
+    await store.saveSettings(start, end, opening, accrual, budgetType as BudgetType, interval);
 
     onNext();
   };

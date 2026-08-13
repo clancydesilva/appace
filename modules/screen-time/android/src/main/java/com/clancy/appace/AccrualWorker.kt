@@ -18,7 +18,15 @@ class AccrualWorker(context: Context, params: WorkerParameters)
         return withContext(Dispatchers.IO) {
             try {
                 BalanceRepository(applicationContext).tick()
-                
+
+                // Reconcile any gap that occurred since the last heartbeat
+                // (e.g. service was killed by OS/OEM between ticks).
+                try {
+                    GapReconciler.reconcile(applicationContext)
+                } catch (e: Exception) {
+                    TelemetryLogger.log(applicationContext, "RAW_EVENT", "RECONCILE_ERR: ${e.message}")
+                }
+
                 try {
                     val serviceIntent = android.content.Intent(applicationContext, ForegroundService::class.java)
                     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {

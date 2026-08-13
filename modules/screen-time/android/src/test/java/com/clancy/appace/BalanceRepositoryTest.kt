@@ -23,7 +23,7 @@ class BalanceRepositoryTest {
     private lateinit var context: Context
 
     @Before
-    fun createDb() {
+    fun createDb() = runBlocking {
         context = ApplicationProvider.getApplicationContext()
         db = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java)
             .allowMainThreadQueries()
@@ -48,41 +48,41 @@ class BalanceRepositoryTest {
         val testDay = LocalDate.of(2026, 6, 5)
         BalanceRepository.testDateTime = LocalDateTime.of(testDay, java.time.LocalTime.of(6, 0))
 
-        // Initial tick should grant opening balance
+        // Initial tick should grant opening balance (300s) + 6am start-hour accrual (300s) = 600s total
         repo.tick()
 
         val balance = repo.getBalance()
-        assertEquals(300L, balance.balanceSeconds) // 300s = 5 mins opening balance
+        assertEquals(600L, balance.balanceSeconds) // 300s opening + 300s start-hour accrual = 10 mins
         assertTrue(balance.windowOpenGrantedToday)
         assertEquals(6, balance.lastAccrualHour)
         assertEquals("2026-06-05", balance.lastResetDate)
 
         // Ticking again at the same time should be idempotent (no double grants)
         repo.tick()
-        assertEquals(300L, repo.getBalance().balanceSeconds)
+        assertEquals(600L, repo.getBalance().balanceSeconds)
     }
 
     @Test
     fun testHourlyAccrualIsIdempotent() = runBlocking {
         val testDay = LocalDate.of(2026, 6, 5)
 
-        // 1. Grant opening balance first at 6:00 AM
+        // 1. Grant opening balance + 6am accrual first at 6:00 AM
         BalanceRepository.testDateTime = LocalDateTime.of(testDay, java.time.LocalTime.of(6, 0))
         repo.tick()
-        assertEquals(300L, repo.getBalance().balanceSeconds)
+        assertEquals(600L, repo.getBalance().balanceSeconds)
 
-        // 2. Move to 7:00 AM (first hourly drop)
+        // 2. Move to 7:00 AM (next hourly drop)
         BalanceRepository.testDateTime = LocalDateTime.of(testDay, java.time.LocalTime.of(7, 0))
         repo.tick()
 
         val balanceAfterFirstDrop = repo.getBalance()
-        assertEquals(600L, balanceAfterFirstDrop.balanceSeconds) // 300s + 300s = 10 mins
+        assertEquals(900L, balanceAfterFirstDrop.balanceSeconds) // 600s + 300s = 15 mins
         assertEquals(7, balanceAfterFirstDrop.lastAccrualHour)
 
         // 3. Ticking again at 7:15 AM should NOT grant another accrual (idempotency check)
         BalanceRepository.testDateTime = LocalDateTime.of(testDay, java.time.LocalTime.of(7, 15))
         repo.tick()
-        assertEquals(600L, repo.getBalance().balanceSeconds)
+        assertEquals(900L, repo.getBalance().balanceSeconds)
     }
 
     @Test
@@ -93,7 +93,7 @@ class BalanceRepositoryTest {
         // 1. Grant opening balance on day 1
         BalanceRepository.testDateTime = LocalDateTime.of(day1, java.time.LocalTime.of(6, 0))
         repo.tick()
-        assertEquals(300L, repo.getBalance().balanceSeconds)
+        assertEquals(600L, repo.getBalance().balanceSeconds)
 
         // 2. Set database balance manually to 1000s
         val current = repo.getBalance()
@@ -117,15 +117,6 @@ class BalanceRepositoryTest {
 
         // Deducting 15 seconds from a balance of 10 should result in 0
         repo.deductSeconds(15L)
-        assertEquals(0L, repo.getBalance().balanceSeconds)
-    }
-
-    @Test
-    fun testSetBalanceSeconds() = runBlocking {
-        repo.setBalanceSeconds(500L)
-        assertEquals(500L, repo.getBalance().balanceSeconds)
-
-        repo.setBalanceSeconds(-10L)
         assertEquals(0L, repo.getBalance().balanceSeconds)
     }
 

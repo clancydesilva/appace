@@ -83,6 +83,13 @@ Every test run and debug cycle must be tracked to maintain a clean history of is
 - Strict TypeScript throughout — no `any` types.
 - No `!!` (non-null assertion) in Kotlin — handle nulls explicitly.
 
+## Room DB Migrations — NON-NEGOTIABLE
+
+- Every Room DB version bump must ship with its own `Migration(oldVersion, newVersion)` object, added to `addMigrations()` in `AppDatabase`. No exceptions.
+- Write the `Migration` object **first** — before any entity, DAO, or repository code that references the new columns or tables.
+- Do not extend `fallbackToDestructiveMigrationFrom` beyond versions 1 and 2. All versions from 3 onwards require explicit migrations.
+- Verify each migration in isolation before proceeding to the next feature: simulate upgrade from the prior schema version, confirm no crash and existing data survives intact.
+
 ## What NOT To Do
 
 - Do not install packages without telling me first.
