@@ -31,7 +31,6 @@ export default function AppsScreen() {
         if (cleaned.length !== state.trackedApps.length) {
           state.setTrackedApps(cleaned);
         }
-        setInitialTrackedApps(useTimerStore.getState().trackedApps);
       })
       .catch(console.warn)
       .finally(() => setLoading(false));
