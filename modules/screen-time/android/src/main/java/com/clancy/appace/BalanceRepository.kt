@@ -146,11 +146,10 @@ class BalanceRepository(private val context: Context) {
                 current = current.copy(
                     balanceSeconds = current.balanceSeconds + current.openingBalanceSeconds,
                     windowOpenGrantedToday = true,
-                    lastAccrualHour = current.windowStartHour
+                    lastAccrualHour = current.windowStartHour - 1
                 )
                 dao.upsert(current)
                 TelemetryLogger.log(context, "TICK", "Opening balance granted: ${current.openingBalanceSeconds / 60}m. Balance: ${current.balanceSeconds}s")
-                return@withLock
             }
 
             // 4. HOURLY ACCRUAL — grant silently if we've moved into a new hour since last accrual
