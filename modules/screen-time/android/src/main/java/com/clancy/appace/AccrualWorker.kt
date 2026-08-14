@@ -40,6 +40,7 @@ class AccrualWorker(context: Context, params: WorkerParameters)
 
                 Result.success()
             } catch (e: Exception) {
+                TelemetryLogger.log(applicationContext, "WORKER_ERR", "AccrualWorker failed: ${e.message ?: "unknown"}")
                 Result.retry()
             }
         }

@@ -30,7 +30,7 @@ export default function HomeScreen() {
     // 1. Initial fetches
     refreshState().catch(console.warn);
 
-    // 2. Setup 30-second refetch interval for database sync
+    // 2. Setup 10-second refetch interval for database sync
     balanceTimer.current = setInterval(() => {
       store.fetchBalance().catch(console.warn);
       store.checkWindow().catch(console.warn);

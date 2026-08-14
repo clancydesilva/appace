@@ -22,29 +22,39 @@ class AppWatcherService : AccessibilityService() {
     @Volatile private var pendingCancelJob: Job? = null  // delayed notification dismissal
     @Volatile private var graceJob: Job? = null          // 5s grace before wiping tracking state
 
-    // Fix #8: Tracked apps cached in memory
+    // Tracked-app list cached in memory and invalidated via SharedPreferences listener.
+    // Avoids a disk read on every TYPE_WINDOW_STATE_CHANGED event, which fires frequently.
     @Volatile private var cachedTrackedApps: Set<String>? = null
     private val prefListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         if (key == "tracked_apps") cachedTrackedApps = null
     }
 
-    // Heartbeat: written every 5-second real deduction tick and on service connect.
+    // Heartbeat: written every DB_DEDUCTION_INTERVAL_TICKS ticks and on service connect.
     // GapReconciler reads this to detect the gap window after a process death.
     private fun persistHeartbeat() {
         getPrefs().edit().putLong("last_heartbeat_ms", System.currentTimeMillis()).apply()
     }
 
-    // Fix #9a: Input method packages cached with 60s TTL + permanent accumulator
-    // The accumulator (knownImePackages) closes the window where a brief IMM-list gap during a
-    // keyboard-open transition could cause a package to slip through as a false app-switch.
+    // Input method packages cached with a 60s TTL plus a permanent accumulator (knownImePackages).
+    // The accumulator closes the window where a brief IMM-list gap during a keyboard-open
+    // transition could cause a package to slip through as a false app-switch.
     // Once a package is ever identified as an IME it stays flagged for this service lifetime.
     @Volatile private var cachedInputMethods: Set<String> = emptySet()
     @Volatile private var inputMethodCacheTime: Long = 0
     private val INPUT_METHOD_CACHE_TTL_MS = 60_000L
     private val knownImePackages = mutableSetOf<String>()
 
-    // Fix #9b: isTopLevelApp results cached per package
+    // isTopLevelApp results cached per package to avoid repeated PackageManager queries.
     private val topLevelCache = HashMap<String, Boolean>()
+
+    companion object {
+        /** Delay before wiping tracking state after a foreground-app change (launcher or untracked). */
+        private const val GRACE_DELAY_MS = 5_000L
+        /** Number of 1-second ticks between real DB deductions in the drain loop. */
+        private const val DB_DEDUCTION_INTERVAL_TICKS = 5
+        /** Duration of each tick in the drain loop (ms). */
+        private const val TICK_MS = 1_000L
+    }
 
     // OEM / system-service packages that fire TYPE_WINDOW_STATE_CHANGED spuriously.
     // These are a true no-op — return immediately with zero state change.
@@ -104,10 +114,14 @@ class AppWatcherService : AccessibilityService() {
         return result
     }
 
-    // Fix #3: Atomic window-check + deduct
+    /**
+     * Deducts elapsed seconds since [snapshotTime] from the balance, gated by the active window.
+     * Uses [BalanceRepository.deductIfInWindow] for an atomic window-check + deduct with no
+     * TOCTOU race between the two operations.
+     */
     private suspend fun deductElapsedTime(snapshotTime: Long): Long {
         val now = SystemClock.elapsedRealtime()
-        val elapsedSeconds = (now - snapshotTime) / 1000
+        val elapsedSeconds = (now - snapshotTime) / TICK_MS
         if (elapsedSeconds > 0) repo.deductIfInWindow(elapsedSeconds)
         return elapsedSeconds
     }
@@ -158,15 +172,15 @@ class AppWatcherService : AccessibilityService() {
 
     /**
      * Cancel the tracking notification.
-     * @param delayed If true, waits 5 seconds before dismissing (grace for control panel swipe-downs).
-     *                The notification stays frozen — no timer movement — during the grace period.
-     *                If false, dismisses immediately (time-up, service destroy).
+     * @param delayed If true, waits [GRACE_DELAY_MS] before dismissing (grace for control panel
+     *                swipe-downs). The notification stays frozen — no timer movement — during the
+     *                grace period. If false, dismisses immediately (time-up, service destroy).
      */
     private fun cancelTrackingNotification(delayed: Boolean = false) {
         pendingCancelJob?.cancel()
         if (delayed) {
             pendingCancelJob = scope.launch {
-                delay(5_000)
+                delay(GRACE_DELAY_MS)
                 nm.cancel(ForegroundService.TRACKING_NOTIFICATION_ID)
                 pendingCancelJob = null
             }
@@ -191,7 +205,7 @@ class AppWatcherService : AccessibilityService() {
         var lastKnownBalance = repo.getBalance().balanceSeconds
 
         while (currentTrackedApp == pkg && currentCoroutineContext().isActive) {
-            delay(1000)
+            delay(TICK_MS)
             if (currentTrackedApp != pkg || !currentCoroutineContext().isActive) break
 
             if (!repo.isWithinWindow()) {
@@ -203,11 +217,11 @@ class AppWatcherService : AccessibilityService() {
 
             tickCount++
 
-            // Every 5 seconds: real DB deduction + sync balance
-            if (tickCount >= 5) {
+            // Every DB_DEDUCTION_INTERVAL_TICKS seconds: real DB deduction + sync balance
+            if (tickCount >= DB_DEDUCTION_INTERVAL_TICKS) {
                 tickCount = 0
                 val now = SystemClock.elapsedRealtime()
-                val elapsed = (now - lastDeductionTime) / 1000
+                val elapsed = (now - lastDeductionTime) / TICK_MS
                 if (elapsed > 0) {
                     repo.deductIfInWindow(elapsed)
                     lastDeductionTime = now
@@ -225,16 +239,16 @@ class AppWatcherService : AccessibilityService() {
                 }
             }
 
-            // Every second: project balance by subtracting elapsed time since last deduction
-            // This gives a smooth live countdown without hitting the DB every second
-            val elapsedSinceDeduct = (SystemClock.elapsedRealtime() - lastDeductionTime) / 1000
+            // Every second: project balance by subtracting elapsed time since last deduction.
+            // This gives a smooth live countdown without hitting the DB every second.
+            val elapsedSinceDeduct = (SystemClock.elapsedRealtime() - lastDeductionTime) / TICK_MS
             val projected = maxOf(0L, lastKnownBalance - elapsedSinceDeduct)
             withContext(Dispatchers.Main) { updateTrackingNotification(pkg, projected) }
 
-            // Fix: Instant block when projected time hits 0s (no 5s tick delay or missing check)
+            // Instant block when projected time hits 0s — avoids waiting for the next DB tick.
             if (projected <= 0L) {
                 val now = SystemClock.elapsedRealtime()
-                val elapsed = (now - lastDeductionTime) / 1000
+                val elapsed = (now - lastDeductionTime) / TICK_MS
                 if (elapsed > 0) {
                     repo.deductIfInWindow(elapsed)
                     lastDeductionTime = now
@@ -247,6 +261,52 @@ class AppWatcherService : AccessibilityService() {
                     break
                 }
             }
+        }
+    }
+
+    /**
+     * Starts a [GRACE_DELAY_MS] timer before wiping the current tracking state.
+     *
+     * Used when a foreground-app change fires toward a launcher or an untracked app. The grace
+     * window handles two cases:
+     * 1. The user pulls down the notification shade (fires a systemui event) then immediately
+     *    returns to the tracked app — the grace prevents a false deduction.
+     * 2. A brief OS overlay momentarily takes foreground — the tracked app regains focus within
+     *    the grace window and state is left intact.
+     *
+     * @param prevApp     The tracked app that was just left.
+     * @param deductFrom  The [SystemClock.elapsedRealtime] snapshot taken at the moment of switch.
+     * @param destination The package that triggered the grace (used for log messages only).
+     * @param logRaw      Log helper from the enclosing [onAccessibilityEvent] scope.
+     */
+    private fun launchGraceJob(
+        prevApp: String,
+        deductFrom: Long,
+        destination: String,
+        logRaw: (String) -> Unit
+    ) {
+        graceJob = scope.launch {
+            delay(GRACE_DELAY_MS)
+            // If prevApp is still the actual foreground window, abort the wipe and leave
+            // currentTrackedApp intact. runTrackingLoop is already running independently;
+            // leaving state intact is all that's needed.
+            // Null/stale rootInActiveWindow is treated conservatively: don't wipe.
+            val stillForeground = try {
+                rootInActiveWindow?.packageName?.toString() == prevApp
+            } catch (e: Exception) { false }
+            if (stillForeground) {
+                logRaw("grace-extended")
+                graceJob = null
+                return@launch
+            }
+            if (currentTrackedApp == prevApp) {
+                currentTrackedApp = null
+                activeTrackingJob?.cancel()
+                val secs = deductElapsedTime(deductFrom)
+                val balance = repo.getBalance().balanceSeconds
+                TelemetryLogger.log(applicationContext, "DEDUCT", "Left $prevApp for $destination after ${GRACE_DELAY_MS / 1000}s grace, deducted ${secs}s, Balance: ${balance}s")
+            }
+            graceJob = null
         }
     }
 
@@ -265,12 +325,13 @@ class AppWatcherService : AccessibilityService() {
                 "pkg=$pkg | class=$logClass | branch=$branch")
         }
 
-        // Fix: OEM system-service popups — true no-op, no state change at all
+        // OEM system-service popups (Samsung OTA, MTP, Smart Switch, telephony dialogs) fire
+        // TYPE_WINDOW_STATE_CHANGED spuriously. Treat as a true no-op with zero state change.
         if (pkg in SYSTEM_NOISE_PACKAGES) { logRaw("system-noise"); return }
 
-        // Fix: In-app browser Custom Tabs (Chrome, Firefox, Samsung Browser, etc.).
-        // CustomTab activities fire TYPE_WINDOW_STATE_CHANGED but are a continuation of
-        // in-app browsing, not a genuine app switch.
+        // In-app browser Custom Tabs (Chrome, Firefox, Samsung Browser, etc.) fire
+        // TYPE_WINDOW_STATE_CHANGED but are a continuation of in-app browsing, not a genuine
+        // app switch — suppressing prevents false "left the tracked app" deductions.
         if (className.contains("CustomTab", ignoreCase = true)) { logRaw("custom-tab"); return }
 
         if (isInputMethod(pkg)) { logRaw("ime"); return }
@@ -284,36 +345,14 @@ class AppWatcherService : AccessibilityService() {
                 if (pkg != "com.android.systemui") {
                     cancelTrackingNotification(delayed = true)
                 }
-                graceJob = scope.launch {
-                    delay(5_000)
-                    // Grace-expiry check: if prevApp is still the foreground window, abort the
-                    // wipe and leave currentTrackedApp intact. runTrackingLoop is already running
-                    // independently — leaving state intact is all that's needed.
-                    // Null/stale rootInActiveWindow is treated conservatively: don't wipe.
-                    val stillForeground = try {
-                        rootInActiveWindow?.packageName?.toString() == prevApp
-                    } catch (e: Exception) { false }
-                    if (stillForeground) {
-                        logRaw("grace-extended")
-                        graceJob = null
-                        return@launch
-                    }
-                    if (currentTrackedApp == prevApp) {
-                        currentTrackedApp = null
-                        activeTrackingJob?.cancel()
-                        val secs = deductElapsedTime(deductFrom)
-                        val balance = repo.getBalance().balanceSeconds
-                        TelemetryLogger.log(applicationContext, "DEDUCT", "Left to $pkg from $prevApp after 5s grace, deducted ${secs}s, Balance: ${balance}s")
-                    }
-                    graceJob = null
-                }
+                launchGraceJob(prevApp, deductFrom, pkg, ::logRaw)
             }
             return
         }
 
         val trackedApps = getTrackedApps()
 
-        // 3. Package is a tracked application
+        // Package is a tracked application
         if (pkg in trackedApps) {
             if (graceJob != null && currentTrackedApp == pkg) {
                 graceJob?.cancel()
@@ -359,27 +398,8 @@ class AppWatcherService : AccessibilityService() {
             val prevApp = currentTrackedApp
             if (prevApp != null && graceJob == null) {
                 val deductFrom = lastDeductionTime
-                cancelTrackingNotification(delayed = true)  // 5s grace — switched to untracked app
-                graceJob = scope.launch {
-                    delay(5_000)
-                    // Grace-expiry check: same logic as the launcher path above.
-                    val stillForeground = try {
-                        rootInActiveWindow?.packageName?.toString() == prevApp
-                    } catch (e: Exception) { false }
-                    if (stillForeground) {
-                        logRaw("grace-extended")
-                        graceJob = null
-                        return@launch
-                    }
-                    if (currentTrackedApp == prevApp) {
-                        currentTrackedApp = null
-                        activeTrackingJob?.cancel()
-                        val secs = deductElapsedTime(deductFrom)
-                        val balance = repo.getBalance().balanceSeconds
-                        TelemetryLogger.log(applicationContext, "DEDUCT", "Left $prevApp for $pkg after 5s grace, deducted ${secs}s, Balance: ${balance}s")
-                    }
-                    graceJob = null
-                }
+                cancelTrackingNotification(delayed = true)  // GRACE_DELAY_MS grace — switched to untracked app
+                launchGraceJob(prevApp, deductFrom, pkg, ::logRaw)
             }
         }
     }
@@ -424,9 +444,8 @@ class AppWatcherService : AccessibilityService() {
     }
 
     private fun launchTimesUpScreen() {
-        // Option A: launch /timesup directly over the tracked app — no Home Screen flash.
-        // ForegroundService keeps the process warm so this should be near-instant.
-        // If the transition still feels laggy we will add the ≤5s pre-warm (Option B).
+        // Launch /timesup directly over the tracked app — no Home Screen flash.
+        // ForegroundService keeps the process warm so the transition should be near-instant.
         val intent = packageManager.getLaunchIntentForPackage(packageName)?.apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             putExtra("route", "/timesup")
@@ -434,7 +453,10 @@ class AppWatcherService : AccessibilityService() {
         if (intent != null) startActivity(intent)
     }
 
-    override fun onInterrupt() {}
+    override fun onInterrupt() {
+        // Required override for AccessibilityService. No cleanup is needed here because
+        // onDestroy() is always called after an interrupt and handles full teardown.
+    }
 
     override fun onDestroy() {
         cancelTrackingNotification()

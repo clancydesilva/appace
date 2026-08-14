@@ -18,6 +18,7 @@
 -dontwarn androidx.room.paging.**
 -keep class com.clancy.appace.BalanceEntity { *; }
 -keep class com.clancy.appace.TelemetryEntity { *; }
+-keep class com.clancy.appace.ReconciliationEntity { *; }
 -keep class com.clancy.appace.AppDatabase_Impl { *; }
 
 # Kotlin Coroutines

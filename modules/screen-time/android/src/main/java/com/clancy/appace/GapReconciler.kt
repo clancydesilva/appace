@@ -13,6 +13,23 @@ object GapReconciler {
     // How far back from now we refuse to look (system withholds this stretch).
     private const val TRUNCATION_SAFETY_MS = 5 * 60 * 1000L
 
+    /**
+     * Attributes screen time that occurred while [AppWatcherService] was not running.
+     *
+     * Called by [AccrualWorker] after every [BalanceRepository.tick]. Reads the reconciliation
+     * cursor ([ReconciliationEntity.lastReconciledMs]) and queries [UsageStatsManager] for all
+     * foreground events in the window `[lastReconciledMs, now - TRUNCATION_SAFETY_MS]`.
+     *
+     * The [TRUNCATION_SAFETY_MS] safety margin exists because Android withholds the most recent
+     * 5+ minutes of `UsageEvents` data from queries; querying into the blackout window returns
+     * incomplete results and would under-attribute usage.
+     *
+     * At the end of a successful run, [ReconciliationEntity.lastReconciledMs] is advanced to
+     * `windowEnd` so the next run only processes new events (idempotent by cursor design).
+     *
+     * **Permission**: requires `PACKAGE_USAGE_STATS` granted via Settings → Usage Access.
+     * If the permission is not granted, this function returns immediately without error.
+     */
     suspend fun reconcile(context: Context) = withContext(Dispatchers.IO) {
         val db = AppDatabase.getInstance(context)
         val reconcileDao = db.reconciliationDao()
@@ -24,6 +41,7 @@ object GapReconciler {
 
         if (windowEnd - windowStart < 1_000L) {
             // Nothing safe to reconcile yet — window too narrow.
+            TelemetryLogger.log(context, "RAW_EVENT", "RECONCILE_SKIPPED reason=window_too_narrow gap=${windowEnd - windowStart}ms")
             return@withContext
         }
 
@@ -97,11 +115,6 @@ object GapReconciler {
             // Currently deductIfInWindow is a flat scalar on a single BalanceEntity row.
             BalanceRepository(context).deductIfInWindow(totalForegroundSeconds)
         }
-
-        val attributedPkgs = (foregroundStarts.keys + trackedApps.filter { pkg ->
-            // List packages that had any events in window
-            true
-        }).toSet().filter { it in trackedApps }
 
         TelemetryLogger.log(
             context,
