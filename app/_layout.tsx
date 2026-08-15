@@ -13,6 +13,14 @@ export default function RootLayout() {
   useEffect(() => {
     const checkRedirect = async () => {
       try {
+        const completed = await store.checkOnboarding();
+        if (!completed) {
+          if (segments[0] !== 'onboarding') {
+            router.replace('/onboarding');
+          }
+          return;
+        }
+
         await store.fetchBalance();
         await store.checkWindow();
 
