@@ -196,7 +196,7 @@ class AppWatcherService : AccessibilityService() {
         if (!repo.hasTimeRemaining() && repo.isWithinWindow()) {
             TelemetryLogger.log(applicationContext, "BLOCK", "Redirected $pkg (0s remaining)")
             cancelTrackingNotification()
-            launchTimesUpScreen()
+            launchAppaceDashboard()
             currentTrackedApp = null
             return
         }
@@ -233,7 +233,7 @@ class AppWatcherService : AccessibilityService() {
                 if (!repo.hasTimeRemaining() && repo.isWithinWindow()) {
                     TelemetryLogger.log(applicationContext, "BLOCK", "Active limit hit inside $pkg (0s remaining)")
                     cancelTrackingNotification()
-                    launchTimesUpScreen()
+                    launchAppaceDashboard()
                     currentTrackedApp = null
                     break
                 }
@@ -256,7 +256,7 @@ class AppWatcherService : AccessibilityService() {
                 if (!repo.hasTimeRemaining() && repo.isWithinWindow()) {
                     TelemetryLogger.log(applicationContext, "BLOCK", "Active limit hit inside $pkg (0s projected remaining)")
                     cancelTrackingNotification()
-                    launchTimesUpScreen()
+                    launchAppaceDashboard()
                     currentTrackedApp = null
                     break
                 }
@@ -443,12 +443,10 @@ class AppWatcherService : AccessibilityService() {
         }
     }
 
-    private fun launchTimesUpScreen() {
-        // Launch /timesup directly over the tracked app — no Home Screen flash.
-        // ForegroundService keeps the process warm so the transition should be near-instant.
+    private fun launchAppaceDashboard() {
+        // Launch Appace Dashboard directly over the tracked app — no Home Screen flash.
         val intent = packageManager.getLaunchIntentForPackage(packageName)?.apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            putExtra("route", "/timesup")
         }
         if (intent != null) startActivity(intent)
     }

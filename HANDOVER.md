@@ -29,7 +29,7 @@ Appace is an Android screen time management app designed around positive reinfor
 ```
 
 The system operates via three main background layers:
-1. **Accessibility Engine (`AppWatcherService`)**: Monitors active foreground window events (`TYPE_WINDOW_STATE_CHANGED`), executes smooth projected timer countdowns, and triggers `/timesup` redirection instantly when screen time expires.
+1. **Accessibility Engine (`AppWatcherService`)**: Monitors active foreground window events (`TYPE_WINDOW_STATE_CHANGED`), executes smooth projected timer countdowns, and triggers redirection to Appace Dashboard instantly when screen time expires.
 2. **Accrual & Reset Engine (`BalanceRepository`)**: Manages hourly time drops during active earning windows, daily midnight resets, and thread-safe Room DB operations.
 3. **Process-Death Backstop (`GapReconciler`)**: Reconciles untracked foreground usage missed during OS process kills/crashes using Android's `UsageStatsManager`.
 
@@ -42,7 +42,7 @@ The system operates via three main background layers:
 * **Responsibilities**:
   * **Event Monitoring**: Filters Android `AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED` events to identify the current foreground application package.
   * **Projection Loop (`runTrackingLoop`)**: Updates ongoing notification live countdown every 1 second via projected wall-clock time (`lastKnownBalance - elapsed`), and writes real deductions to Room DB every 5 seconds.
-  * **Direct Blocking (Option A)**: Launches `/timesup` directly over the blocked app using `Intent.FLAG_ACTIVITY_NEW_TASK or FLAG_ACTIVITY_CLEAR_TOP` without flashing the Android Home Screen.
+  * **Direct Blocking (Option A)**: Launches Appace Dashboard directly over the blocked app using `Intent.FLAG_ACTIVITY_NEW_TASK or FLAG_ACTIVITY_CLEAR_TOP` without flashing the Android Home Screen.
   * **TikTok Continuous Scroll Guard**: Executes an inline `rootInActiveWindow` check inside `graceJob` before state wipe; if the target app is still foreground, grace is extended silently without tracking drop.
   * **Heartbeat Persistence**: Writes wall-clock `last_heartbeat_ms` to `SharedPreferences` every 5-second deduction cycle and on service connect.
 
@@ -54,7 +54,7 @@ The system operates via three main background layers:
 
 ---
 
-### B. Accrual & Reset Repository (`BalanceRepository.kt`)
+## 2. Accrual & Reset Repository (`BalanceRepository.kt`)
 * **Location**: `modules/screen-time/android/src/main/java/com/clancy/appace/BalanceRepository.kt`
 * **Responsibilities**:
   * **Model B Opening Grant**: At active window start (e.g. 6:00 AM), grants **both** the Opening Balance **and** the start-hour accrual (`lastAccrualHour = windowStartHour - 1`). For example, 5m opening + 5m 6am drop = 10m total at 6:00 AM.
@@ -97,7 +97,6 @@ The system operates via three main background layers:
   * `(tabs)/index.tsx`: Home balance display with live countdown ring and earning window indicators.
   * `(tabs)/apps.tsx`: Tracked apps drawer with alphabetical sorting, uninstalled app filtering, and non-jumping row updates via `baselineTrackedApps`.
   * `(tabs)/settings.tsx`: Configuration screen with Rule Presets (Standard, Custom, locked Compounding tab), live previews, and explicit batch save ("Confirm Changes").
-  * `timesup.tsx`: Full-screen blocking splash with hardware back button blocking.
 
 ---
 

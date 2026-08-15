@@ -1,4 +1,4 @@
-﻿# Appace — Architecture Overview
+# Appace — Architecture Overview
 
 > Last updated: 2026-08  
 > Package: `com.clancy.appace`  
@@ -74,7 +74,7 @@
 4. Every **1 second**: the drain loop projects the balance locally (no DB read).
 5. Every **5 seconds**: a real `BalanceRepository.deductIfInWindow(elapsed)` call writes to Room.
    - `persistHeartbeat()` is also written, so `GapReconciler` can detect any subsequent gap.
-6. When balance hits 0 or the user leaves: `launchTimesUpScreen()` / deduction committed.
+6. When balance hits 0 or the user leaves: `launchAppaceDashboard()` / deduction committed.
 
 ---
 
@@ -120,7 +120,6 @@ This prevents false deductions from notification shade swipes and brief OS overl
 app/                       Expo Router screens
   (tabs)/index.tsx         Main balance screen (drain + refetch loops)
   (tabs)/settings.tsx      Settings screen
-  timesup.tsx              Full-screen blocker (time-up screen)
   onboarding.tsx           Multi-step onboarding flow
   privacy.tsx              Privacy policy screen
 

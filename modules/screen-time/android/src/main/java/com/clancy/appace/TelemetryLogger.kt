@@ -19,7 +19,7 @@ object TelemetryLogger {
      * - `"TICK"` — [BalanceRepository.tick] accrual or periodic check
      * - `"SCREEN_TICK"` — drain loop heartbeat while a tracked app is active
      * - `"DEDUCT"` — time deducted after a session ends
-     * - `"BLOCK"` — user redirected to the timesup screen
+     * - `"BLOCK"` — user redirected to Appace dashboard (screen time expired)
      * - `"RAW_EVENT"` — raw [AccessibilityEvent] classification in [AppWatcherService]
      * - `"RECONCILE"` / `"RECONCILE_SKIPPED"` — [GapReconciler] run results
      * - `"WORKER_ERR"` — [AccrualWorker] caught an unexpected exception

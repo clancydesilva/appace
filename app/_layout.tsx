@@ -23,24 +23,6 @@ export default function RootLayout() {
 
         await store.fetchBalance();
         await store.checkWindow();
-
-        const state = useTimerStore.getState();
-        const onBlockerScreen = segments[0] === 'timesup';
-        const onOnboardingScreen = segments[0] === 'onboarding';
-
-        if (
-          state.balanceSeconds <= 0 &&
-          state.isWithinWindow &&
-          !onOnboardingScreen &&
-          !onBlockerScreen
-        ) {
-          router.replace('/timesup');
-        } else if (
-          (state.balanceSeconds > 0 || !state.isWithinWindow) &&
-          onBlockerScreen
-        ) {
-          router.replace('/(tabs)');
-        }
       } catch (e) {
         console.warn('Redirect guard error:', e);
       }
@@ -64,7 +46,6 @@ export default function RootLayout() {
       <StatusBar style="light" />
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="timesup" options={{ presentation: 'fullScreenModal' }} />
         <Stack.Screen name="privacy" options={{ presentation: 'fullScreenModal' }} />
         <Stack.Screen name="onboarding" />
       </Stack>
