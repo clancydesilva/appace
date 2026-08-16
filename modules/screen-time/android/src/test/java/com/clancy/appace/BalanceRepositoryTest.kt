@@ -214,6 +214,26 @@ class BalanceRepositoryTest {
     }
 
     @Test
+    fun testAllSettingsMutatorsExecuteWithoutMutexDeadlock() = runBlocking {
+        // Exercise every settings mutator method to verify zero non-reentrant mutex deadlocks
+        repo.setBalanceSeconds(120L)
+        repo.setWindowHours(7, 22)
+        repo.setOpeningBalance(15)
+        repo.setHourlyAccrual(10)
+        repo.setBudgetType("strict")
+        repo.setAccrualInterval(2)
+
+        val updated = repo.getBalance()
+        assertEquals(120L, updated.balanceSeconds)
+        assertEquals(7, updated.windowStartHour)
+        assertEquals(22, updated.windowEndHour)
+        assertEquals(900L, updated.openingBalanceSeconds) // 15 mins * 60s
+        assertEquals(600L, updated.hourlyAccrualSeconds)  // 10 mins * 60s
+        assertEquals("strict", updated.budgetType)
+        assertEquals(2, updated.accrualIntervalHours)
+    }
+
+    @Test
     fun testSequentialTickAndDeductDeadlockCanaryWithTimeout() = runBlocking {
         val testDay = LocalDate.of(2026, 6, 5)
         BalanceRepository.testDateTime = LocalDateTime.of(testDay, java.time.LocalTime.of(6, 0))
