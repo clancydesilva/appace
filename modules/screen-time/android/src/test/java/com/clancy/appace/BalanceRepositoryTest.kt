@@ -29,6 +29,7 @@ class BalanceRepositoryTest {
             .allowMainThreadQueries()
             .build()
         AppDatabase.setTestInstance(db)
+        BalanceRepository.clearCache()
         repo = BalanceRepository(context)
         repo.initIfEmpty()
         BalanceRepository.testDateTime = null
@@ -39,6 +40,7 @@ class BalanceRepositoryTest {
     fun closeDb() {
         db.close()
         AppDatabase.clearTestInstance()
+        BalanceRepository.clearCache()
         BalanceRepository.testDateTime = null
     }
 
@@ -132,5 +134,101 @@ class BalanceRepositoryTest {
         assertEquals(0L, balance.balanceSeconds)
         assertFalse(balance.windowOpenGrantedToday)
         assertEquals(-1, balance.lastAccrualHour)
+    }
+
+    @Test
+    fun testHourRolloverDuringContinuousTrackingSessionGrantsAccrualBeforeBlockCheck() = runBlocking {
+        val testDay = LocalDate.of(2026, 6, 5)
+
+        // 1. Initial 6:00 AM start (600s total)
+        BalanceRepository.testDateTime = LocalDateTime.of(testDay, java.time.LocalTime.of(6, 0))
+        repo.tick()
+
+        // 2. Fast-forward to 6:59:55 AM with only 5 seconds remaining before block
+        BalanceRepository.testDateTime = LocalDateTime.of(testDay, java.time.LocalTime.of(6, 59, 55))
+        repo.setBalanceSeconds(5L)
+        assertEquals(5L, repo.getBalance().balanceSeconds)
+
+        // 3. Roll over to 7:00:00 AM while continuously inside active tracking loop
+        BalanceRepository.testDateTime = LocalDateTime.of(testDay, java.time.LocalTime.of(7, 0, 0))
+        assertTrue("Accrual pre-check must detect hour rollover", repo.isAccrualNeeded())
+
+        // Execute exact 5-second tracking loop sequence
+        if (repo.isAccrualNeeded()) {
+            repo.tick()
+        }
+        repo.deductIfInWindow(5L)
+
+        // 4. Verify the 7:00 AM hourly drop (+300s) was granted BEFORE block evaluation
+        // Result: 5s remaining - 5s deduction + 300s accrual = 300s
+        assertEquals(300L, repo.getBalance().balanceSeconds)
+        assertTrue("User must NOT be blocked when hour rolls over", repo.hasTimeRemaining())
+    }
+
+    @Test
+    fun testNoOpTickWhenHourHasNotChangedBypassesAccrual() = runBlocking {
+        val testDay = LocalDate.of(2026, 6, 5)
+
+        // 1. Tick at 7:00:00 AM
+        BalanceRepository.testDateTime = LocalDateTime.of(testDay, java.time.LocalTime.of(7, 0, 0))
+        repo.tick()
+        val balanceAtSeven = repo.getBalance().balanceSeconds
+
+        // 2. Next 5-second tick at 7:00:05 AM (same hour)
+        BalanceRepository.testDateTime = LocalDateTime.of(testDay, java.time.LocalTime.of(7, 0, 5))
+        assertFalse("Same hour must return false from isAccrualNeeded()", repo.isAccrualNeeded())
+
+        // 3. Tick at 7:45:00 AM (same hour)
+        BalanceRepository.testDateTime = LocalDateTime.of(testDay, java.time.LocalTime.of(7, 45, 0))
+        assertFalse("Later in same hour must still return false", repo.isAccrualNeeded())
+
+        // Calling tick anyway must be completely idempotent
+        repo.tick()
+        assertEquals(balanceAtSeven, repo.getBalance().balanceSeconds)
+    }
+
+    @Test
+    fun testLaunchAtHourBoundaryWithZeroPriorBalanceGrantsAccrualBeforeBlockCheck() = runBlocking {
+        val testDay = LocalDate.of(2026, 6, 5)
+
+        // 1. Initial 6:00 AM start, then balance fully depleted to 0 at 6:50 AM
+        BalanceRepository.testDateTime = LocalDateTime.of(testDay, java.time.LocalTime.of(6, 0))
+        repo.tick()
+        BalanceRepository.testDateTime = LocalDateTime.of(testDay, java.time.LocalTime.of(6, 50))
+        repo.setBalanceSeconds(0L)
+        assertEquals(0L, repo.getBalance().balanceSeconds)
+
+        // 2. User opens tracked app at 7:00:01 AM
+        BalanceRepository.testDateTime = LocalDateTime.of(testDay, java.time.LocalTime.of(7, 0, 1))
+        assertTrue("Launch check at new hour must detect accrual needed", repo.isAccrualNeeded())
+
+        // Execute launch path sequence in runTrackingLoop
+        if (repo.isAccrualNeeded()) {
+            repo.tick()
+        }
+        val isBlocked = !repo.hasTimeRemaining() && repo.isWithinWindow()
+
+        // 3. User must NOT be blocked on launch
+        assertFalse("User opening app at 7:00:01 AM must NOT be blocked", isBlocked)
+        assertEquals(300L, repo.getBalance().balanceSeconds)
+    }
+
+    @Test
+    fun testSequentialTickAndDeductDeadlockCanaryWithTimeout() = runBlocking {
+        val testDay = LocalDate.of(2026, 6, 5)
+        BalanceRepository.testDateTime = LocalDateTime.of(testDay, java.time.LocalTime.of(6, 0))
+
+        // Canary test: Ensure sequential calls to tick() and deductIfInWindow()
+        // complete rapidly (<2000ms) and never hang or deadlock on the shared mutex.
+        val startTime = System.currentTimeMillis()
+        for (i in 1..20) {
+            if (repo.isAccrualNeeded()) {
+                repo.tick()
+            }
+            repo.deductIfInWindow(1L)
+            repo.getBalance()
+        }
+        val elapsed = System.currentTimeMillis() - startTime
+        assertTrue("Sequence took ${elapsed}ms, must complete under 2000ms", elapsed < 2000L)
     }
 }

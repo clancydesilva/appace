@@ -344,3 +344,30 @@ Use this file to log every test run, errors encountered, changes made, and verif
 * **Instant Kick**: Verified that when balance runs out, the user is instantly dropped back to the phone's Home Screen in 0ms, preventing any cold-start exploitation of the blocked app.
 * **UI Race Condition**: Verified that opening Appace immediately shows the correct deducted balance without holding the previous cached balance.
 * **Onboarding Fresh Reinstall**: Verified that uninstalling and reinstalling the app successfully starts on the onboarding layout due to `android:allowBackup="false"` preventing system backup restoration.
+
+---
+
+## [2026-08-16 12:25] Hour-Boundary Accrual During Active Tracking Fix
+
+* **Test Goal**: Eliminate the hour-boundary block gap where users continuously inside tracked apps would get blocked for up to 15 minutes right around an hour rollover before `AccrualWorker` fires.
+* **Environment**: Local Robolectric test environment (API 34, JDK 17), Kotlin 2.1.20, branch `fix/hour-boundary-accrual`.
+
+### Changes Made
+1. **`BalanceRepository.kt`**:
+   - Added in-memory volatile caching for `lastAccrualHour` and `lastResetDate` along with `isAccrualNeeded()` fast pre-check to eliminate unnecessary database reads during active tracking loops.
+   - Updated cache synchronization in `initIfEmpty()`, `getBalance()`, and `tick()`.
+   - Fixed non-reentrant mutex deadlock in setter functions (`setBalanceSeconds`, `setWindowHours`, `setOpeningBalance`, `setHourlyAccrual`, `setBudgetType`, `setAccrualInterval`) by replacing internal `getBalance()` calls with direct DAO lookups under `mutex.withLock`.
+2. **`AppWatcherService.kt`**:
+   - Updated `runTrackingLoop` entry check to execute `if (repo.isAccrualNeeded()) repo.tick()` prior to evaluating `!repo.hasTimeRemaining()`.
+   - Updated 5-second tracking loop to execute `if (repo.isAccrualNeeded()) repo.tick()` before `repo.deductIfInWindow(elapsed)` and only then evaluate balance <= 0 to decide whether to block.
+   - Updated 1-second projection zero-check to execute `if (repo.isAccrualNeeded()) repo.tick()` and sync `lastKnownBalance` when projected hits 0s.
+3. **`BalanceRepositoryTest.kt`**:
+   - Added `testHourRolloverDuringContinuousTrackingSessionGrantsAccrualBeforeBlockCheck`.
+   - Added `testNoOpTickWhenHourHasNotChangedBypassesAccrual`.
+   - Added `testLaunchAtHourBoundaryWithZeroPriorBalanceGrantsAccrualBeforeBlockCheck`.
+   - Added `testSequentialTickAndDeductDeadlockCanaryWithTimeout`.
+
+### ✅ Test Run (Passed)
+* **Command**: `npx tsc --noEmit` -> Passed with 0 errors.
+* **Command**: `.\gradlew :screen-time:testDebugUnitTest` -> `BUILD SUCCESSFUL in 1m 13s` (all 9 unit tests passed).
+* **Command**: `.\gradlew test` -> `BUILD SUCCESSFUL in 2m 59s` (550 actionable tasks, all test suites passed).

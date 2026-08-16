@@ -179,6 +179,9 @@ class AppWatcherService : AccessibilityService() {
     // --- Drain loop ---
 
     private suspend fun runTrackingLoop(pkg: String) {
+        if (repo.isAccrualNeeded()) {
+            repo.tick()
+        }
         if (!repo.hasTimeRemaining() && repo.isWithinWindow()) {
             TelemetryLogger.log(applicationContext, "BLOCK", "Redirected $pkg (0s remaining)")
             cancelTrackingNotification()
@@ -206,6 +209,9 @@ class AppWatcherService : AccessibilityService() {
             // Every 5 seconds: real DB deduction + sync balance
             if (tickCount >= 5) {
                 tickCount = 0
+                if (repo.isAccrualNeeded()) {
+                    repo.tick()
+                }
                 val now = SystemClock.elapsedRealtime()
                 val elapsed = (now - lastDeductionTime) / 1000
                 if (elapsed > 0) {
@@ -238,6 +244,10 @@ class AppWatcherService : AccessibilityService() {
                 if (elapsed > 0) {
                     repo.deductIfInWindow(elapsed)
                     lastDeductionTime = now
+                }
+                if (repo.isAccrualNeeded()) {
+                    repo.tick()
+                    lastKnownBalance = repo.getBalance().balanceSeconds
                 }
                 if (!repo.hasTimeRemaining() && repo.isWithinWindow()) {
                     TelemetryLogger.log(applicationContext, "BLOCK", "Active limit hit inside $pkg (0s projected remaining)")

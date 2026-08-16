@@ -13,6 +13,36 @@ class BalanceRepository(private val context: Context) {
     companion object {
         var testDateTime: LocalDateTime? = null
         private val mutex = Mutex()
+
+        @Volatile private var cachedLastAccrualHour: Int = -1
+        @Volatile private var cachedLastResetDate: String = ""
+        @Volatile private var isCacheHydrated: Boolean = false
+
+        fun updateCache(lastAccrualHour: Int, lastResetDate: String) {
+            cachedLastAccrualHour = lastAccrualHour
+            cachedLastResetDate = lastResetDate
+            isCacheHydrated = true
+        }
+
+        fun clearCache() {
+            cachedLastAccrualHour = -1
+            cachedLastResetDate = ""
+            isCacheHydrated = false
+        }
+    }
+
+    /**
+     * Fast in-memory check to determine if [tick] needs to run.
+     * If the cache is not yet hydrated, or the date has changed, or the hour has moved past
+     * [cachedLastAccrualHour], returns true.
+     * Returns false when called during the same hour and date, bypassing unnecessary DB queries.
+     */
+    fun isAccrualNeeded(): Boolean {
+        if (!isCacheHydrated) return true
+        val now = getCurrentDateTime()
+        val todayStr = now.toLocalDate().toString()
+        val currentHour = now.hour
+        return todayStr != cachedLastResetDate || currentHour > cachedLastAccrualHour
     }
 
     private fun getCurrentDateTime(): LocalDateTime {
@@ -38,8 +68,13 @@ class BalanceRepository(private val context: Context) {
      */
     suspend fun initIfEmpty() = withContext(Dispatchers.IO) {
         mutex.withLock {
-            if (dao.getBalance() == null) {
-                dao.upsert(createDefaultBalance())
+            val existing = dao.getBalance()
+            if (existing == null) {
+                val def = createDefaultBalance()
+                dao.upsert(def)
+                updateCache(def.lastAccrualHour, def.lastResetDate)
+            } else {
+                updateCache(existing.lastAccrualHour, existing.lastResetDate)
             }
         }
     }
@@ -47,10 +82,16 @@ class BalanceRepository(private val context: Context) {
     /** Returns the current [BalanceEntity], creating and persisting a default row if none exists. */
     suspend fun getBalance(): BalanceEntity = withContext(Dispatchers.IO) {
         mutex.withLock {
-            if (dao.getBalance() == null) {
-                dao.upsert(createDefaultBalance())
+            val existing = dao.getBalance()
+            val result = if (existing == null) {
+                val def = createDefaultBalance()
+                dao.upsert(def)
+                def
+            } else {
+                existing
             }
-            dao.getBalance() ?: createDefaultBalance()
+            updateCache(result.lastAccrualHour, result.lastResetDate)
+            result
         }
     }
 
@@ -93,7 +134,7 @@ class BalanceRepository(private val context: Context) {
     /** Sets the balance directly to [seconds] (floor at 0). Used by the JS bridge for manual adjustments. */
     suspend fun setBalanceSeconds(seconds: Long) = withContext(Dispatchers.IO) {
         mutex.withLock {
-            val b = getBalance()
+            val b = dao.getBalance() ?: createDefaultBalance()
             dao.upsert(b.copy(balanceSeconds = maxOf(0, seconds)))
         }
     }
@@ -101,7 +142,7 @@ class BalanceRepository(private val context: Context) {
     /** Updates the start and end hour of the active earning window. Persisted to Room immediately. */
     suspend fun setWindowHours(start: Int, end: Int) = withContext(Dispatchers.IO) {
         mutex.withLock {
-            val b = getBalance()
+            val b = dao.getBalance() ?: createDefaultBalance()
             dao.upsert(b.copy(windowStartHour = start, windowEndHour = end))
         }
     }
@@ -109,7 +150,7 @@ class BalanceRepository(private val context: Context) {
     /** Updates the opening balance (in minutes, stored as seconds). Granted once at window-open each day. */
     suspend fun setOpeningBalance(minutes: Int) = withContext(Dispatchers.IO) {
         mutex.withLock {
-            val b = getBalance()
+            val b = dao.getBalance() ?: createDefaultBalance()
             dao.upsert(b.copy(openingBalanceSeconds = minutes * 60L))
         }
     }
@@ -117,7 +158,7 @@ class BalanceRepository(private val context: Context) {
     /** Updates the per-interval hourly accrual amount (in minutes, stored as seconds). */
     suspend fun setHourlyAccrual(minutes: Int) = withContext(Dispatchers.IO) {
         mutex.withLock {
-            val b = getBalance()
+            val b = dao.getBalance() ?: createDefaultBalance()
             dao.upsert(b.copy(hourlyAccrualSeconds = minutes * 60L))
         }
     }
@@ -128,7 +169,7 @@ class BalanceRepository(private val context: Context) {
      */
     suspend fun setBudgetType(type: String) = withContext(Dispatchers.IO) {
         mutex.withLock {
-            val b = getBalance()
+            val b = dao.getBalance() ?: createDefaultBalance()
             dao.upsert(b.copy(budgetType = type))
         }
     }
@@ -136,7 +177,7 @@ class BalanceRepository(private val context: Context) {
     /** Updates how many hours must pass between each hourly accrual drop (default: 1). */
     suspend fun setAccrualInterval(hours: Int) = withContext(Dispatchers.IO) {
         mutex.withLock {
-            val b = getBalance()
+            val b = dao.getBalance() ?: createDefaultBalance()
             dao.upsert(b.copy(accrualIntervalHours = hours))
         }
     }
@@ -176,7 +217,10 @@ class BalanceRepository(private val context: Context) {
 
             // 2. Outside window — do nothing
             val inWindow = currentHour >= current.windowStartHour && currentHour < current.windowEndHour
-            if (!inWindow) return@withLock
+            if (!inWindow) {
+                updateCache(current.lastAccrualHour, current.lastResetDate)
+                return@withLock
+            }
 
             // 3. OPENING BALANCE — grant once at window start if not yet done today
             if (!current.windowOpenGrantedToday) {
@@ -220,6 +264,7 @@ class BalanceRepository(private val context: Context) {
             } else {
                 TelemetryLogger.log(context, "TICK", "Periodic check. Balance: ${current.balanceSeconds}s")
             }
+            updateCache(current.lastAccrualHour, current.lastResetDate)
         }
     }
 }
