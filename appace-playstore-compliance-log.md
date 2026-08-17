@@ -56,28 +56,10 @@ Following a full codebase audit comparing the actual implementation against Goog
 | **B. Dual-Path: Accessibility primary + UsageStats fallback** | Medium | Medium | Resilient across OS versions & APM mode |
 | **C. Full Migration to UsageStatsManager (polling/events)** | Low | High | 5-min recency delay on recent sessions; coarse |
 
-#### Action Required:
-- [ ] Prune `flagReportViewIds` from `accessibility_service_config.xml`.
-- [ ] Ensure Prominent Disclosure is presented before *all* navigation paths to Accessibility Settings (including Settings tab).
+### Action Required:
+- [x] Prune `flagReportViewIds` from `accessibility_service_config.xml`.
+- [x] Ensure Prominent Disclosure is presented before *all* navigation paths to Accessibility Settings (including Settings tab).
 - [ ] Prepare video demonstration showing: (a) Prominent Disclosure screen, (b) user consent, (c) redirection to settings, and (d) real-time blocking in action.
-
----
-
-### 2. `PACKAGE_USAGE_STATS` (`GapReconciler`) — 🟡 MEDIUM RISK
-
-#### Current Implementation
-- Declared in `AndroidManifest.xml` with `tools:ignore="ProtectedPermissions"`.
-- Used by `GapReconciler.kt` (`AppOpsManager.OPSTR_GET_USAGE_STATS` / `UsageStatsManager.queryEvents`) to attribute screen time that occurred during service downtime or after device reboot.
-- Soft-fails gracefully if permission is not granted.
-
-#### Policy Risks & Findings
-- ❌ **Discrepancy Found:** The previous compliance log claimed `StepUsageAccess in onboarding explains why the permission is needed`. **This component does not exist in the codebase.**
-- Neither `onboarding.tsx` nor `settings.tsx` contains UI to explain or route users to `Settings.ACTION_USAGE_ACCESS_SETTINGS`.
-- **Play Store Risk:** Uploading an APK/AAB declaring `PACKAGE_USAGE_STATS` triggers the **Usage Access Declaration** in Google Play Console. If Google reviewers inspect the app and find no user-facing UI or explanation for this permission, the declaration will likely be rejected or flagged as an unused/unjustified special permission.
-
-#### Action Required:
-- [ ] **Option 1 (Recommended if keeping GapReconciler):** Add a dedicated `StepUsageAccess` in onboarding (or an opt-in card in Settings) with prominent disclosure explaining gap reconciliation, and provide a button linking to `android.provider.Settings.ACTION_USAGE_ACCESS_SETTINGS`.
-- [ ] **Option 2 (If relying solely on AccessibilityService):** Remove `android.permission.PACKAGE_USAGE_STATS` from `AndroidManifest.xml` and disable `GapReconciler` until ready for full declaration.
 
 ---
 
@@ -179,18 +161,15 @@ Following a full codebase audit comparing the actual implementation against Goog
 
 | Area | Issue / Requirement | Severity | Current Status | Owner |
 |---|---|---|---|---|
-| **`PACKAGE_USAGE_STATS`** | Doc claimed `StepUsageAccess` exists; missing from codebase. | High | ❌ Action Required: Add UI step or remove manifest permission | Clancy / Dev |
-| **Accessibility Config** | Unused `flagReportViewIds` in XML config. | Medium | ⚠️ Action Required: Remove flag from XML | Clancy / Dev |
-| **Accessibility Disclosure** | Prominent disclosure present in onboarding, but missing prior to Settings tab redirect. | Medium | ⚠️ Action Required: Add disclosure modal to Settings | Clancy / Dev |
-| **Accessibility Declaration** | Prepare video demonstration showing read-only foreground monitoring. | High | ⚠️ Pending Video Asset | Clancy |
-| **Foreground Service** | `stopForeground(STOP_FOREGROUND_REMOVE)` pattern + FGS `specialUse` declaration form. | Medium-High | ⚠️ Review FGS lifecycle / Prepare video | Clancy / Dev |
+| **Accessibility Disclosure** | Prominent disclosure before all accessibility setting redirects. | High | ✅ **Resolved** (Phase A) | Done |
+| **Accessibility Config** | Prune unused flags (`flagReportViewIds`) to maintain minimal scope. | Medium | ✅ **Resolved** (Phase B) | Done |
+| **Usage Access Disclosure** | Prominent disclosure for `PACKAGE_USAGE_STATS` in onboarding and settings. | High | ✅ **Resolved** (Phase C) | Done |
+| **Foreground Service Policy** | Remove redundant FGS & `specialUse` permission to eliminate policy scrutiny. | High | ✅ **Resolved** (Phase D) | Done |
+| **Accessibility Declaration Video** | Prepare video demonstration showing read-only foreground monitoring. | High | ⚠️ Pending Video Asset | Clancy |
 | **Privacy Policy URL** | Host `privacy_policy.md` on a live HTTPS web page for Play Console store listing. | High | ⚠️ Action Required: Deploy public URL | Clancy |
 | **Data Safety Form** | Fill out Play Console Data Safety form stating no data leaves device. | Low | ⚠️ Pending Form Submission | Clancy |
 
 ---
 
-## Summary of Code Changes Needed Before Store Submission
-1. **`accessibility_service_config.xml`**: Prune `flagReportViewIds` to maintain minimum required scope.
-2. **Usage Access UI**: Implement `StepUsageAccess.tsx` (or remove `PACKAGE_USAGE_STATS` from `AndroidManifest.xml` if unused).
-3. **Settings Disclosure**: Add prominent disclosure dialog before opening accessibility settings from `PermissionsStatus.tsx`.
-4. **Deploy Privacy Policy**: Host `privacy_policy.md` at a public HTTPS URL.
+## Summary of Code Status
+All 4 codebase compliance fixes (Phases A, B, C, and D) are implemented, verified with TypeScript and Kotlin unit tests, and committed on the `compliance` branch. Outstanding non-code tasks before submission are: (1) public hosting of Privacy Policy URL, (2) Accessibility declaration video recording, and (3) Play Console form submissions.
