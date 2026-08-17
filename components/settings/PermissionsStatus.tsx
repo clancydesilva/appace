@@ -3,16 +3,23 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useTimerStore } from '../../store/useTimerStore';
 import { Colors } from '../../constants/theme';
 import { AccessibilityDisclosureModal } from '../AccessibilityDisclosureModal';
+import { UsageAccessDisclosureModal } from '../UsageAccessDisclosureModal';
 
 export function PermissionsStatus() {
   const store = useTimerStore();
   const [disclosureVisible, setDisclosureVisible] = useState(false);
+  const [usageDisclosureVisible, setUsageDisclosureVisible] = useState(false);
 
   return (
     <>
       <AccessibilityDisclosureModal
         visible={disclosureVisible}
         onClose={() => setDisclosureVisible(false)}
+      />
+
+      <UsageAccessDisclosureModal
+        visible={usageDisclosureVisible}
+        onClose={() => setUsageDisclosureVisible(false)}
       />
 
       <Text style={styles.groupHeader}>System Permissions</Text>
@@ -42,6 +49,35 @@ export function PermissionsStatus() {
               onPress={() => setDisclosureVisible(true)}
             >
               <Text style={styles.statusButtonText}>Enable</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Usage Access Row */}
+        <View style={[styles.listRow, { borderTopWidth: 1, borderColor: Colors.border }]}>
+          <View style={styles.listRowInfo}>
+            <Text style={styles.listRowTitle}>Usage Access</Text>
+            <Text style={styles.listRowDesc}>
+              Reconciles screen time after service interruptions or device restart.
+            </Text>
+            <View style={styles.indicatorWrap}>
+              <View
+                style={[
+                  styles.statusIndicator,
+                  store.usageAccessGranted ? styles.statusActive : styles.statusInactive,
+                ]}
+              />
+              <Text style={styles.indicatorText}>
+                {store.usageAccessGranted ? 'Granted (Reconciling)' : 'Optional (Recommended)'}
+              </Text>
+            </View>
+          </View>
+          {!store.usageAccessGranted && (
+            <TouchableOpacity
+              style={styles.statusButton}
+              onPress={() => setUsageDisclosureVisible(true)}
+            >
+              <Text style={styles.statusButtonText}>Grant</Text>
             </TouchableOpacity>
           )}
         </View>

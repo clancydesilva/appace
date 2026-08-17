@@ -29,11 +29,13 @@ export default function SettingsScreen() {
     // Check permissions immediately
     store.checkAccessibility();
     store.checkBatteryOptimization();
+    store.checkUsageAccess();
 
     // Poll permissions every 2 seconds to capture settings changes automatically
     statusTimer.current = setInterval(() => {
       store.checkAccessibility();
       store.checkBatteryOptimization();
+      store.checkUsageAccess();
     }, 2000);
 
     return () => {

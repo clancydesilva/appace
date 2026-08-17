@@ -5,6 +5,7 @@ import { useTimerStore } from '../store/useTimerStore';
 import { StepWelcome } from '../components/onboarding/StepWelcome';
 import { StepBudget } from '../components/onboarding/StepBudget';
 import { StepAccessibility } from '../components/onboarding/StepAccessibility';
+import { StepUsageAccess } from '../components/onboarding/StepUsageAccess';
 import { StepBattery } from '../components/onboarding/StepBattery';
 import { StepNotifications } from '../components/onboarding/StepNotifications';
 import { StepApps } from '../components/onboarding/StepApps';
@@ -35,6 +36,11 @@ export default function OnboardingScreen() {
       permissionTimer.current = setInterval(() => {
         store.checkAccessibility();
       }, 1000);
+    } else if (step === 4) {
+      store.checkUsageAccess();
+      permissionTimer.current = setInterval(() => {
+        store.checkUsageAccess();
+      }, 1000);
     } else {
       if (permissionTimer.current) {
         clearInterval(permissionTimer.current);
@@ -50,16 +56,23 @@ export default function OnboardingScreen() {
     }
   }, [store.accessibilityEnabled, step]);
 
-  // Step 4 (Battery) status polling
+  // Auto-advance when usage access permission is detected
   useEffect(() => {
-    if (step === 4) {
+    if (step === 4 && store.usageAccessGranted) {
+      setStep(5);
+    }
+  }, [store.usageAccessGranted, step]);
+
+  // Step 5 (Battery) status polling
+  useEffect(() => {
+    if (step === 5) {
       store.checkBatteryOptimization();
     }
   }, [step]);
 
-  // Step 6 (Apps) fetch list
+  // Step 7 (Apps) fetch list
   useEffect(() => {
-    if (step === 6) {
+    if (step === 7) {
       setLoadingApps(true);
       store.fetchInstalledApps()
         .then(() => store.fetchTrackedApps())
@@ -85,7 +98,7 @@ export default function OnboardingScreen() {
 
   const renderDotIndicator = () => (
     <View style={styles.indicatorContainer}>
-      {[1, 2, 3, 4, 5, 6].map((i) => (
+      {[1, 2, 3, 4, 5, 6, 7].map((i) => (
         <View
           key={i}
           style={[
@@ -110,9 +123,10 @@ export default function OnboardingScreen() {
           {step === 1 && <StepWelcome onNext={() => setStep(2)} />}
           {step === 2 && <StepBudget onNext={() => setStep(3)} />}
           {step === 3 && <StepAccessibility />}
-          {step === 4 && <StepBattery onNext={() => setStep(5)} />}
-          {step === 5 && <StepNotifications onNext={() => setStep(6)} />}
-          {step === 6 && (
+          {step === 4 && <StepUsageAccess onNext={() => setStep(5)} />}
+          {step === 5 && <StepBattery onNext={() => setStep(6)} />}
+          {step === 6 && <StepNotifications onNext={() => setStep(7)} />}
+          {step === 7 && (
             <StepApps
               searchQuery={searchQuery}
               setSearchQuery={setSearchQuery}

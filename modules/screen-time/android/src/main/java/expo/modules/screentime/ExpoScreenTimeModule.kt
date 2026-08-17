@@ -228,6 +228,31 @@ class ExpoScreenTimeModule : Module() {
             context.startActivity(intent)
         }
 
+        AsyncFunction("isUsageAccessGranted") { ->
+            try {
+                val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as? android.app.AppOpsManager
+                if (appOps == null) {
+                    false
+                } else {
+                    val mode = appOps.checkOpNoThrow(
+                        android.app.AppOpsManager.OPSTR_GET_USAGE_STATS,
+                        android.os.Process.myUid(),
+                        context.packageName
+                    )
+                    mode == android.app.AppOpsManager.MODE_ALLOWED
+                }
+            } catch (e: Exception) {
+                false
+            }
+        }
+
+        AsyncFunction("openUsageAccessSettings") { ->
+            val intent = Intent(android.provider.Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            context.startActivity(intent)
+        }
+
         AsyncFunction("startForegroundService") { ->
             context.startForegroundService(Intent(context, ForegroundService::class.java))
             Unit

@@ -15,6 +15,7 @@ interface TimerStore {
   isWithinWindow: boolean;
   accessibilityEnabled: boolean;
   batteryOptimizationIgnored: boolean;
+  usageAccessGranted: boolean;
   onboardingCompleted: boolean;
   telemetryLogs: TelemetryLog[];
 
@@ -27,6 +28,7 @@ interface TimerStore {
   checkWindow: () => Promise<void>;
   checkAccessibility: () => Promise<void>;
   checkBatteryOptimization: () => Promise<void>;
+  checkUsageAccess: () => Promise<void>;
   setWindowHours: (start: number, end: number) => Promise<void>;
   setOpeningBalance: (mins: number) => Promise<void>;
   setHourlyAccrual: (mins: number) => Promise<void>;
@@ -36,6 +38,7 @@ interface TimerStore {
   saveSettings: (start: number, end: number, opening: number, accrual: number, type: BudgetType, interval: number) => Promise<void>;
   openAccessibilitySettings: () => Promise<void>;
   openBatteryOptimizationSettings: () => Promise<void>;
+  openUsageAccessSettings: () => Promise<void>;
   startService: () => Promise<void>;
   fetchTelemetryLogs: () => Promise<void>;
   clearTelemetryLogs: () => Promise<void>;
@@ -54,6 +57,7 @@ export const useTimerStore = create<TimerStore>((set, get) => ({
   isWithinWindow: false,
   accessibilityEnabled: false,
   batteryOptimizationIgnored: false,
+  usageAccessGranted: false,
   onboardingCompleted: false,
   telemetryLogs: [],
 
@@ -86,6 +90,7 @@ export const useTimerStore = create<TimerStore>((set, get) => ({
   checkWindow: async () => set({ isWithinWindow: await ScreenTime.isWithinWindow() }),
   checkAccessibility: async () => set({ accessibilityEnabled: await ScreenTime.isAccessibilityEnabled() }),
   checkBatteryOptimization: async () => set({ batteryOptimizationIgnored: await ScreenTime.isBatteryOptimizationIgnored() }),
+  checkUsageAccess: async () => set({ usageAccessGranted: await ScreenTime.isUsageAccessGranted() }),
 
   setWindowHours: async (start, end) => {
     await ScreenTime.setWindowHours(start, end);
@@ -124,6 +129,7 @@ export const useTimerStore = create<TimerStore>((set, get) => ({
   },
   openAccessibilitySettings: async () => ScreenTime.openAccessibilitySettings(),
   openBatteryOptimizationSettings: async () => ScreenTime.openBatteryOptimizationSettings(),
+  openUsageAccessSettings: async () => ScreenTime.openUsageAccessSettings(),
   startService: async () => ScreenTime.startForegroundService(),
   fetchTelemetryLogs: async () => set({ telemetryLogs: await ScreenTime.getTelemetryLogs() }),
   clearTelemetryLogs: async () => {
