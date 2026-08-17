@@ -1,160 +1,192 @@
-﻿# Appace — Play Store Compliance Log
+# Appace — Play Store Compliance Log
 
-**Date:** 2026-08  
-**Status:** Pre-submission review
-
----
-
-## Summary
-
-This document tracks the Play Store policy status of each permission, feature type, and sensitive API used in Appace. It is intended to be reviewed before each Play Console submission.
+**Date:** 2026-08 (Updated Post-Codebase Audit)  
+**Status:** Pre-submission review & Gap Analysis  
+**Package:** `com.clancy.appace`  
+**Target SDK:** 36 (Compliant with Google Play minimum API 34+ requirement)
 
 ---
 
-## 1. AccessibilityService — HIGH RISK
+## Executive Summary
 
-### Current State
+This document tracks the Google Play Store policy status of all permissions, feature declarations, sensitive APIs, and architectural patterns used in Appace.
 
-`AppWatcherService` uses `AccessibilityService` with `TYPE_WINDOW_STATE_CHANGED` events to detect the foreground app in real time. The service is **read-only** — it issues no gestures, performs no UI interaction, and does not read any on-screen content. Its sole purpose is to identify which app package is in the foreground.
+Following a full codebase audit comparing the actual implementation against Google Play Developer Program Policies (including Android 14/15/16 policy updates and Android 17 Advanced Protection Mode considerations), the findings are summarized below.
 
-### Policy Risk
+### Key Audit Findings
+1. **Discrepancy in `PACKAGE_USAGE_STATS`:** The previous log stated `StepUsageAccess` in onboarding explains this permission. **In reality, `StepUsageAccess` does not exist in the codebase.** The permission is declared in `AndroidManifest.xml` and used by `GapReconciler.kt`, but there is currently no user-facing UI or runtime flow to request/explain it.
+2. **AccessibilityService Configuration Overscoping:** `accessibility_service_config.xml` includes `flagReportViewIds` (completely unused) and `canRetrieveWindowContent="true"` (Appace only reads `rootInActiveWindow.packageName` for grace checks). Pruning unused flags reduces policy scrutiny.
+3. **Foreground Service Policy & Risk Elevation:** `ForegroundService.kt` employs a `startForeground(...)` followed immediately by `stopForeground(STOP_FOREGROUND_REMOVE)` pattern. Under Android 14+ FGS policy, foreground services must keep a visible notification while executing, and background launches from WorkManager can trigger `ForegroundServiceStartNotAllowedException`. FGS risk is elevated to **MEDIUM-HIGH**.
+4. **Battery Optimization Compliance Verified:** Appace does not request the restricted `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` manifest permission; it opens system settings via `ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS` (`✅ Compliant`).
+5. **No `INTERNET` Permission:** The app does not declare `android.permission.INTERNET`, providing ironclad proof for offline Data Safety claims (`✅ Verified`).
+6. **Package Visibility Verified:** Uses `<queries>` intent filters instead of `QUERY_ALL_PACKAGES` (`✅ Compliant`).
 
-Google''s current policy states that AccessibilityServices must be justified by a "core use case" that genuinely assists users with disabilities. Screen-time and digital wellbeing management does not qualify under the published examples.
+---
 
-### Android 17 Risk
+## Policy Assessment by Component
 
-Starting with Android 17 (expected late 2026), Advanced Protection Mode (APM) will block AccessibilityService permissions at the OS level for non-qualifying apps, regardless of Play Store policy compliance. Users with APM enabled will have no AccessibilityService access even if the app is approved.
+---
 
-### Mitigation Options
+### 1. AccessibilityService (`AppWatcherService`) — 🔴 HIGH RISK
 
-| Option | Compliance Risk | Implementation Effort | Accuracy |
+#### Current Implementation
+- `AppWatcherService` extends `AccessibilityService` and listens for `TYPE_WINDOW_STATE_CHANGED` events to detect foreground application changes in real time (<100ms latency).
+- **Behavior:** The service is strictly read-only. It performs no gestures, extracts no text content, and intercepts no keystrokes.
+- **Config (`accessibility_service_config.xml`):**
+  - `accessibilityEventTypes="typeWindowStateChanged"`
+  - `accessibilityFlags="flagDefault|flagReportViewIds|flagRetrieveInteractiveWindows"`
+  - `canRetrieveWindowContent="true"`
+  - `description="@string/accessibility_description"`
+
+#### Policy Risks & Findings
+1. **Core Use Case Policy:** Google Play policy mandates that Accessibility Services should be reserved for apps providing accessibility functionality to users with disabilities. Digital wellbeing / screen time apps do not fall under standard qualifying exemptions and frequently face rejection unless granted an exception via the **Accessibility Declaration Form**.
+2. **Config Overscoping:**
+   - `flagReportViewIds` is enabled in XML but never utilized in code.
+   - `canRetrieveWindowContent="true"` is declared. While `AppWatcherService` accesses `rootInActiveWindow?.packageName` during grace period checks, declaring full window content access while claiming "no screen content is read" triggers heightened scrutiny during manual review.
+3. **Prominent Disclosure Implementation:**
+   - ✅ `StepAccessibility.tsx` provides a prominent in-app disclosure with an explicit user consent checkbox prior to directing the user to system settings.
+   - ⚠️ `PermissionsStatus.tsx` in Settings links directly to `ACTION_ACCESSIBILITY_SETTINGS` without showing the prominent disclosure dialog first if re-enabled later.
+4. **Android 17 Advanced Protection Mode (APM):**
+   - Starting in Android 17, APM will block Accessibility Services at the OS level for apps that are not certified assistive tools, regardless of Play Store distribution status.
+
+#### Mitigation Strategy
+| Strategy | Policy Risk | Dev Effort | Accuracy & UX |
 |---|---|---|---|
-| **A. Migrate to UsageStatsManager polling (1–5s interval)** | Low | Medium | Good (limited by 5-min recency blackout for recent sessions) |
-| **B. UsageStatsManager + WorkManager (1-min poll)** | Low | Low | Coarse (60s window gaps) |
-| **C. Submit Accessibility Declaration Form** | Medium (still rejected if policy applied strictly) | Low | N/A |
-| **D. Keep AccessibilityService + UsageStatsManager fallback for APM** | Medium | High | Best coverage across both paths |
+| **A. Keep AccessibilityService + Submit Declaration & Video** | High | Low | Instant blocking (<100ms), no gap latency |
+| **B. Dual-Path: Accessibility primary + UsageStats fallback** | Medium | Medium | Resilient across OS versions & APM mode |
+| **C. Full Migration to UsageStatsManager (polling/events)** | Low | High | 5-min recency delay on recent sessions; coarse |
 
-**Recommendation:** Option A or D, depending on acceptable accuracy tradeoff. Option A removes the primary policy risk entirely since `PACKAGE_USAGE_STATS` is a permitted API for digital-wellbeing apps. Option D provides the best experience today while gracefully degrading for Android 17 users.
-
-**Decision needed before next Play Console submission.**
-
----
-
-## 2. PACKAGE_USAGE_STATS — MEDIUM RISK
-
-### Current State
-
-`PACKAGE_USAGE_STATS` is declared in `AndroidManifest.xml` and used by `GapReconciler.kt` to query `UsageStatsManager` for gap attribution. The app soft-fails gracefully if the permission is not granted (GapReconciler returns without error).
-
-### Policy Requirement
-
-Apps using `PACKAGE_USAGE_STATS` must:
-1. Declare it in the manifest with `tools:ignore="ProtectedPermissions"` ✓
-2. Submit a declaration in Play Console under **Policy → App content → Permissions → Usage Stats** explaining the exact use case.
-3. Provide a user-facing explanation in the app itself (onboarding or settings).
-
-### Status
-
-✅ Manifest declaration: correct  
-✅ User-facing explanation: `StepUsageAccess` in onboarding explains why the permission is needed  
-⚠️ **Play Console declaration**: uncertain — confirm this has been submitted and approved  
+#### Action Required:
+- [ ] Prune `flagReportViewIds` from `accessibility_service_config.xml`.
+- [ ] Ensure Prominent Disclosure is presented before *all* navigation paths to Accessibility Settings (including Settings tab).
+- [ ] Prepare video demonstration showing: (a) Prominent Disclosure screen, (b) user consent, (c) redirection to settings, and (d) real-time blocking in action.
 
 ---
 
-## 3. FOREGROUND_SERVICE (specialUse) — LOW RISK
+### 2. `PACKAGE_USAGE_STATS` (`GapReconciler`) — 🟡 MEDIUM RISK
 
-### Current State
+#### Current Implementation
+- Declared in `AndroidManifest.xml` with `tools:ignore="ProtectedPermissions"`.
+- Used by `GapReconciler.kt` (`AppOpsManager.OPSTR_GET_USAGE_STATS` / `UsageStatsManager.queryEvents`) to attribute screen time that occurred during service downtime or after device reboot.
+- Soft-fails gracefully if permission is not granted.
 
-`ForegroundService` declares `android:foregroundServiceType="specialUse"` and the required `PROPERTY_SPECIAL_USE_FGS_SUBTYPE` property with the description: *"Monitoring screen time and app usage to enforce budgets."*
+#### Policy Risks & Findings
+- ❌ **Discrepancy Found:** The previous compliance log claimed `StepUsageAccess in onboarding explains why the permission is needed`. **This component does not exist in the codebase.**
+- Neither `onboarding.tsx` nor `settings.tsx` contains UI to explain or route users to `Settings.ACTION_USAGE_ACCESS_SETTINGS`.
+- **Play Store Risk:** Uploading an APK/AAB declaring `PACKAGE_USAGE_STATS` triggers the **Usage Access Declaration** in Google Play Console. If Google reviewers inspect the app and find no user-facing UI or explanation for this permission, the declaration will likely be rejected or flagged as an unused/unjustified special permission.
 
-Both `FOREGROUND_SERVICE` and `FOREGROUND_SERVICE_SPECIAL_USE` permissions are declared in the manifest.
-
-### Policy Requirement
-
-Apps using `foregroundServiceType="specialUse"` must:
-1. Declare the required permission ✓
-2. Provide a `PROPERTY_SPECIAL_USE_FGS_SUBTYPE` value ✓
-3. Submit a Play Console declaration under **Policy → App content → Foreground services** ✓ (assumed — verify)
-
-### Status
-
-✅ Manifest is correct  
-⚠️ **Play Console declaration**: verify this has been filed under Policy → App content → Foreground services  
+#### Action Required:
+- [ ] **Option 1 (Recommended if keeping GapReconciler):** Add a dedicated `StepUsageAccess` in onboarding (or an opt-in card in Settings) with prominent disclosure explaining gap reconciliation, and provide a button linking to `android.provider.Settings.ACTION_USAGE_ACCESS_SETTINGS`.
+- [ ] **Option 2 (If relying solely on AccessibilityService):** Remove `android.permission.PACKAGE_USAGE_STATS` from `AndroidManifest.xml` and disable `GapReconciler` until ready for full declaration.
 
 ---
 
-## 4. POST_NOTIFICATIONS — LOW RISK
+### 3. Foreground Service (`specialUse`) — 🟠 MEDIUM-HIGH RISK
 
-### Current State
+#### Current Implementation
+- Manifest declares `android.permission.FOREGROUND_SERVICE` and `android.permission.FOREGROUND_SERVICE_SPECIAL_USE`.
+- `ForegroundService` specifies `android:foregroundServiceType="specialUse"` with property `android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE` = *"Monitoring screen time and app usage to enforce budgets."*
+- `ForegroundService.kt` calls `startForeground(1, placeholder, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)` and immediately invokes `stopForeground(STOP_FOREGROUND_REMOVE)` to avoid a permanent sticky notification.
 
-`POST_NOTIFICATIONS` is declared and requested at runtime in `StepNotifications.tsx` (onboarding step) using `PermissionsAndroid.request`. The runtime permission is gated to Android 13+ (API 33+).
+#### Policy Risks & Findings
+1. **Android 14+ FGS Policy Enforcement:** Google Play requires all apps targeting API 34+ declaring `specialUse` FGS to:
+   - Provide a user-facing justification in the Play Console declaration.
+   - Upload a video showing the user-initiated feature that requires the foreground service.
+   - Prove why standard FGS types (e.g. `dataSync`, `mediaPlayback`) are inadequate.
+2. **Notification Circumvention Risk:** Calling `startForeground()` and immediately calling `stopForeground(STOP_FOREGROUND_REMOVE)` while keeping a background loop or returning `START_STICKY` is an anti-pattern. Google Play reviewers can reject apps that use FGS declarations to bypass background limits without providing an ongoing, user-visible notification.
+3. **Background Start Restrictions:** Calling `context.startForegroundService()` from `AccrualWorker` (WorkManager) while the app is in the background can trigger `ForegroundServiceStartNotAllowedException` on Android 12+ / 14+.
 
-### Usage
-
-The live tracking notification shown while a tracked app is active (the countdown timer notification). This is a clear, user-visible benefit directly related to the app''s stated purpose.
-
-### Status
-
-✅ Declared correctly  
-✅ Requested at runtime on Android 13+  
-✅ User can deny without breaking core functionality (tracking still works, notification is optional)  
-
----
-
-## 5. RECEIVE_BOOT_COMPLETED — LOW RISK
-
-### Current State
-
-`BootReceiver` listens for `android.intent.action.BOOT_COMPLETED` to restart the foreground service and WorkManager after a device reboot. Without this, the app would not resume monitoring after a reboot until the user manually opens it.
-
-### Status
-
-✅ Declared correctly  
-✅ Standard usage for a persistent monitoring app  
+#### Action Required:
+- [ ] Verify if `ForegroundService` is strictly necessary when `AppWatcherService` (Accessibility) is already running as an independent OS-managed service.
+- [ ] If FGS is retained, maintain an active notification or restructure the notification lifecycle to align with Google Play FGS guidelines.
+- [ ] Prepare Play Console `specialUse` declaration text and demonstration video.
 
 ---
 
-## 6. Data Safety Form
+### 4. Notifications (`POST_NOTIFICATIONS`) — 🟢 LOW RISK / COMPLIANT
 
-### Current State
+#### Current Implementation
+- Manifest declares `android.permission.POST_NOTIFICATIONS`.
+- `StepNotifications.tsx` requests runtime permission on Android 13+ (API 33+) via `PermissionsAndroid.request`.
+- The notification is used solely for the active tracking countdown timer (and foreground service status).
+- The user can skip/deny notification permission without breaking core balance tracking or blocking features.
 
-- All telemetry is written to the local Room database only. No network calls are made. No data leaves the device.
-- No analytics SDKs are present.
-- No advertising SDKs are present.
-- No third-party SDKs with data collection are present.
-
-### Data Collected
-
-| Data Type | Collected? | Shared? | Encrypted? |
-|---|---|---|---|
-| App usage (which apps the user opens) | Yes — stored locally for enforcement | No | No (SQLite at rest, default Android encryption if device encrypted) |
-| Battery level | Yes — stored locally in telemetry log | No | No |
-| Timestamps of app sessions | Yes — stored locally | No | No |
-| Device identifiers | No | — | — |
-| Financial data | No | — | — |
-| Location | No | — | — |
-
-### Status
-
-⚠️ **Data Safety form**: confirm the form accurately reflects the above. The key assertions to make:
-- "No data is shared with third parties"
-- "No data is collected for advertising purposes"
-- "App activity data is collected but not sent off-device"
+#### Status
+- ✅ **Compliant.** Implemented according to Android 13+ runtime permission guidelines.
 
 ---
 
-## 7. QUERY_ALL_PACKAGES — NOT USED ✅
+### 5. Boot Receiver (`RECEIVE_BOOT_COMPLETED`) — 🟢 LOW RISK / COMPLIANT
 
-The app uses a `<queries>` intent filter instead of `QUERY_ALL_PACKAGES` to enumerate launcher apps. This is the correct, approved approach and does not trigger the `QUERY_ALL_PACKAGES` policy review.
+#### Current Implementation
+- `BootReceiver.kt` listens for `android.intent.action.BOOT_COMPLETED` to reschedule `AccrualWorker` and re-initialize background tracking.
+- Uses `goAsync()` with coroutine scope to log telemetry and handle startup asynchronously without blocking the broadcast.
+
+#### Status
+- ✅ **Compliant.** Standard, acceptable usage for monitoring and utility applications.
 
 ---
 
-## Action Items Before Next Submission
+### 6. Battery Optimization (`REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`) — 🟢 COMPLIANT
 
-| Item | Owner | Status |
+#### Current Implementation
+- `StepBattery.tsx` and `PermissionsStatus.tsx` direct users to system battery settings using `android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS`.
+- The app **does not** declare `android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` in `AndroidManifest.xml` and does not invoke `ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` (direct dialog).
+
+#### Status
+- ✅ **Compliant.** Google Play strictly restricts direct battery optimization prompt permissions. Directing users to system settings via standard intent avoids this policy restriction entirely.
+
+---
+
+### 7. Package Visibility (`<queries>` vs `QUERY_ALL_PACKAGES`) — 🟢 COMPLIANT
+
+#### Current Implementation
+- `AndroidManifest.xml` defines `<queries>` for `MAIN`/`LAUNCHER` and `VIEW`/`BROWSABLE`/`https`.
+- `ExpoScreenTimeModule.kt` queries `Intent.ACTION_MAIN` + `CATEGORY_LAUNCHER` via `packageManager.queryIntentActivities(...)`.
+- `QUERY_ALL_PACKAGES` is **not** declared in the manifest.
+
+#### Status
+- ✅ **Compliant.** Avoids the high-scrutiny `QUERY_ALL_PACKAGES` permission policy. Correctly adheres to Android 11+ package visibility best practices.
+
+---
+
+### 8. Data Safety & Privacy Policy — 🟢 COMPLIANT (Action Needed on Public URL)
+
+#### Current Implementation
+- **100% Offline App:** `android.permission.INTERNET` is not requested anywhere in the manifest or application.
+- No analytics SDKs, advertising SDKs, crashlytics, or external network tracking libraries are present in `package.json` or `build.gradle`.
+- All telemetry, settings, and balances reside strictly in the local Room SQLite database (`appace.db`).
+- Privacy policy is integrated in-app via `app/privacy.tsx` and `privacy_policy.md`.
+
+#### Data Safety Form Responses for Play Console:
+| Data Safety Category | Declaration | Justification |
 |---|---|---|
-| Decide on AccessibilityService migration path (Options A–D above) | Clancy | ⚠️ Pending decision |
-| Verify `PACKAGE_USAGE_STATS` declaration submitted in Play Console | Clancy | ⚠️ Verify |
-| Verify `specialUse` FGS declaration submitted in Play Console | Clancy | ⚠️ Verify |
-| Verify Data Safety form matches current behavior (no network, local only) | Clancy | ⚠️ Verify |
-| If AccessibilityService kept: prepare video demo of read-only use for declaration form | Clancy | Pending decision on item 1 |
+| **Data Collection** | "App activity" (Installed apps tracked, session timestamps) & "Device diagnostics" (Battery level in telemetry log) | Collected locally only for screen time budget enforcement |
+| **Data Sharing** | "No data shared with third parties" | Verified: No network permission, zero external requests |
+| **Ephemeral Processing** | Local SQLite storage only | Stored on-device; deleted upon app uninstall |
+| **Account Deletion** | Not Applicable | No account creation or authentication exists |
+
+#### Action Required:
+- [ ] **Public Privacy Policy URL:** Google Play requires a publicly accessible, active HTTPS URL linking to the privacy policy (e.g. GitHub Pages or website). Host `privacy_policy.md` publicly before submission.
+
+---
+
+## Action Items & Readiness Matrix
+
+| Area | Issue / Requirement | Severity | Current Status | Owner |
+|---|---|---|---|---|
+| **`PACKAGE_USAGE_STATS`** | Doc claimed `StepUsageAccess` exists; missing from codebase. | High | ❌ Action Required: Add UI step or remove manifest permission | Clancy / Dev |
+| **Accessibility Config** | Unused `flagReportViewIds` in XML config. | Medium | ⚠️ Action Required: Remove flag from XML | Clancy / Dev |
+| **Accessibility Disclosure** | Prominent disclosure present in onboarding, but missing prior to Settings tab redirect. | Medium | ⚠️ Action Required: Add disclosure modal to Settings | Clancy / Dev |
+| **Accessibility Declaration** | Prepare video demonstration showing read-only foreground monitoring. | High | ⚠️ Pending Video Asset | Clancy |
+| **Foreground Service** | `stopForeground(STOP_FOREGROUND_REMOVE)` pattern + FGS `specialUse` declaration form. | Medium-High | ⚠️ Review FGS lifecycle / Prepare video | Clancy / Dev |
+| **Privacy Policy URL** | Host `privacy_policy.md` on a live HTTPS web page for Play Console store listing. | High | ⚠️ Action Required: Deploy public URL | Clancy |
+| **Data Safety Form** | Fill out Play Console Data Safety form stating no data leaves device. | Low | ⚠️ Pending Form Submission | Clancy |
+
+---
+
+## Summary of Code Changes Needed Before Store Submission
+1. **`accessibility_service_config.xml`**: Prune `flagReportViewIds` to maintain minimum required scope.
+2. **Usage Access UI**: Implement `StepUsageAccess.tsx` (or remove `PACKAGE_USAGE_STATS` from `AndroidManifest.xml` if unused).
+3. **Settings Disclosure**: Add prominent disclosure dialog before opening accessibility settings from `PermissionsStatus.tsx`.
+4. **Deploy Privacy Policy**: Host `privacy_policy.md` at a public HTTPS URL.

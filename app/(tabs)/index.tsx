@@ -14,11 +14,13 @@ import { useTimerStore } from '../../store/useTimerStore';
 
 import { calculateMaxDailyMinutes } from '../../utils/budget';
 import { formatHourLabel } from '../../utils/formatTime';
+import { AccessibilityDisclosureModal } from '../../components/AccessibilityDisclosureModal';
 
 export default function HomeScreen() {
   const router = useRouter();
   const store = useTimerStore();
 
+  const [disclosureVisible, setDisclosureVisible] = useState(false);
   const [minutesUntilNextDrop, setMinutesUntilNextDrop] = useState(60 - new Date().getMinutes());
   const [hourProgress, setHourProgress] = useState(new Date().getMinutes() / 60);
 
@@ -103,12 +105,17 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      <AccessibilityDisclosureModal
+        visible={disclosureVisible}
+        onClose={() => setDisclosureVisible(false)}
+      />
+
       <View style={styles.container}>
         {/* Subtle Permission Warning Banners */}
         {!store.accessibilityEnabled && (
           <TouchableOpacity
             style={styles.warningBanner}
-            onPress={() => store.openAccessibilitySettings()}
+            onPress={() => setDisclosureVisible(true)}
             activeOpacity={0.8}
           >
             <Text style={styles.warningTitle}>Accessibility Service Inactive</Text>

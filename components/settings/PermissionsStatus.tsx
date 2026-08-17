@@ -1,13 +1,20 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useTimerStore } from '../../store/useTimerStore';
 import { Colors } from '../../constants/theme';
+import { AccessibilityDisclosureModal } from '../AccessibilityDisclosureModal';
 
 export function PermissionsStatus() {
   const store = useTimerStore();
+  const [disclosureVisible, setDisclosureVisible] = useState(false);
 
   return (
     <>
+      <AccessibilityDisclosureModal
+        visible={disclosureVisible}
+        onClose={() => setDisclosureVisible(false)}
+      />
+
       <Text style={styles.groupHeader}>System Permissions</Text>
       <View style={styles.listGroup}>
         {/* Accessibility Row */}
@@ -32,7 +39,7 @@ export function PermissionsStatus() {
           {!store.accessibilityEnabled && (
             <TouchableOpacity
               style={styles.statusButton}
-              onPress={() => store.openAccessibilitySettings()}
+              onPress={() => setDisclosureVisible(true)}
             >
               <Text style={styles.statusButtonText}>Enable</Text>
             </TouchableOpacity>
