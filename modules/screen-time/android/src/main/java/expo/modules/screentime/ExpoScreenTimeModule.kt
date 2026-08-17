@@ -4,7 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.content.Intent
 import com.clancy.appace.BalanceRepository
-import com.clancy.appace.ForegroundService
+import com.clancy.appace.AccrualWorker
 import com.clancy.appace.AppDatabase
 import com.clancy.appace.TelemetryEntity
 import expo.modules.kotlin.modules.Module
@@ -254,7 +254,10 @@ class ExpoScreenTimeModule : Module() {
         }
 
         AsyncFunction("startForegroundService") { ->
-            context.startForegroundService(Intent(context, ForegroundService::class.java))
+            scope.launch {
+                repo.initIfEmpty()
+            }
+            AccrualWorker.schedule(context)
             Unit
         }
 

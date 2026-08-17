@@ -15,6 +15,9 @@ import com.facebook.react.defaults.DefaultReactNativeHost
 
 import expo.modules.ApplicationLifecycleDispatcher
 import expo.modules.ReactNativeHostWrapper
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 class MainApplication : Application(), ReactApplication {
 
@@ -47,6 +50,11 @@ class MainApplication : Application(), ReactApplication {
     }
     loadReactNative(this)
     ApplicationLifecycleDispatcher.onApplicationCreate(this)
+
+    CoroutineScope(Dispatchers.IO).launch {
+      BalanceRepository(applicationContext).initIfEmpty()
+    }
+    AccrualWorker.schedule(this)
   }
 
   override fun onConfigurationChanged(newConfig: Configuration) {

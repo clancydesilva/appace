@@ -1,7 +1,5 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
-  <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
-  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/>
   <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
   <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
   <!-- Required by GapReconciler to query UsageStatsManager for gap attribution.
@@ -49,14 +47,6 @@
       <meta-data
         android:name="android.accessibilityservice"
         android:resource="@xml/accessibility_service_config"/>
-    </service>
-
-    <!-- Foreground Service: keeps the watcher alive -->
-    <service
-      android:name=".ForegroundService"
-      android:foregroundServiceType="specialUse"
-      android:exported="false">
-      <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Monitoring screen time and app usage to enforce budgets." />
     </service>
 
     <!-- Boot Receiver: restarts services after phone reboot -->

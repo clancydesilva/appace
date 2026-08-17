@@ -81,25 +81,29 @@ Following a full codebase audit comparing the actual implementation against Goog
 
 ---
 
-### 3. Foreground Service (`specialUse`) — 🟠 MEDIUM-HIGH RISK
+### 2. `PACKAGE_USAGE_STATS` (`GapReconciler`) — 🟢 COMPLIANT
 
-#### Current Implementation
-- Manifest declares `android.permission.FOREGROUND_SERVICE` and `android.permission.FOREGROUND_SERVICE_SPECIAL_USE`.
-- `ForegroundService` specifies `android:foregroundServiceType="specialUse"` with property `android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE` = *"Monitoring screen time and app usage to enforce budgets."*
-- `ForegroundService.kt` calls `startForeground(1, placeholder, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)` and immediately invokes `stopForeground(STOP_FOREGROUND_REMOVE)` to avoid a permanent sticky notification.
+#### Implementation
+- Declared in `AndroidManifest.xml` with `tools:ignore="ProtectedPermissions"`.
+- Used by `GapReconciler.kt` (`AppOpsManager.OPSTR_GET_USAGE_STATS` / `UsageStatsManager.queryEvents`) to attribute screen time that occurred during service downtime or after device reboot.
+- `StepUsageAccess.tsx` added to onboarding (Step 4) with prominent disclosure and affirmative consent checkbox.
+- `UsageAccessDisclosureModal` added to `PermissionsStatus.tsx` in Settings for re-granting.
+- Soft-fails gracefully if permission is not granted.
 
-#### Policy Risks & Findings
-1. **Android 14+ FGS Policy Enforcement:** Google Play requires all apps targeting API 34+ declaring `specialUse` FGS to:
-   - Provide a user-facing justification in the Play Console declaration.
-   - Upload a video showing the user-initiated feature that requires the foreground service.
-   - Prove why standard FGS types (e.g. `dataSync`, `mediaPlayback`) are inadequate.
-2. **Notification Circumvention Risk:** Calling `startForeground()` and immediately calling `stopForeground(STOP_FOREGROUND_REMOVE)` while keeping a background loop or returning `START_STICKY` is an anti-pattern. Google Play reviewers can reject apps that use FGS declarations to bypass background limits without providing an ongoing, user-visible notification.
-3. **Background Start Restrictions:** Calling `context.startForegroundService()` from `AccrualWorker` (WorkManager) while the app is in the background can trigger `ForegroundServiceStartNotAllowedException` on Android 12+ / 14+.
+#### Status
+- ✅ **Compliant.** Prominent in-app disclosure and user consent flow implemented in both onboarding and Settings.
 
-#### Action Required:
-- [ ] Verify if `ForegroundService` is strictly necessary when `AppWatcherService` (Accessibility) is already running as an independent OS-managed service.
-- [ ] If FGS is retained, maintain an active notification or restructure the notification lifecycle to align with Google Play FGS guidelines.
-- [ ] Prepare Play Console `specialUse` declaration text and demonstration video.
+---
+
+### 3. Foreground Service (`specialUse`) — 🟢 RESOLVED / REMOVED
+
+#### Resolution
+- **Removed:** Redundant `ForegroundService.kt` and manifest permissions (`FOREGROUND_SERVICE` and `FOREGROUND_SERVICE_SPECIAL_USE`) have been removed.
+- **Architecture:** `AppWatcherService` (Accessibility) is independently managed by the Android OS and owns the live countdown notification. Periodic hourly accruals and gap reconciliation are managed by `AccrualWorker` (WorkManager).
+- **Result:** Eliminates Google Play `specialUse` FGS policy declaration requirements, eliminates background start exceptions (`ForegroundServiceStartNotAllowedException`), and removes FGS policy scrutiny entirely.
+
+#### Status
+- ✅ **Resolved.** Zero FGS permissions or policy exposure.
 
 ---
 

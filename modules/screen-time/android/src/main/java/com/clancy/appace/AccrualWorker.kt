@@ -27,17 +27,6 @@ class AccrualWorker(context: Context, params: WorkerParameters)
                     TelemetryLogger.log(applicationContext, "RAW_EVENT", "RECONCILE_ERR: ${e.message}")
                 }
 
-                try {
-                    val serviceIntent = android.content.Intent(applicationContext, ForegroundService::class.java)
-                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                        applicationContext.startForegroundService(serviceIntent)
-                    } else {
-                        applicationContext.startService(serviceIntent)
-                    }
-                } catch (e: Exception) {
-                    TelemetryLogger.log(applicationContext, "SERVICE_START_ERR", "Worker failed to start service: ${e.message}")
-                }
-
                 Result.success()
             } catch (e: Exception) {
                 TelemetryLogger.log(applicationContext, "WORKER_ERR", "AccrualWorker failed: ${e.message ?: "unknown"}")

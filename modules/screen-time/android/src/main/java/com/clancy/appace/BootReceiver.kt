@@ -12,12 +12,12 @@ class BootReceiver : BroadcastReceiver() {
             val scope = CoroutineScope(Dispatchers.IO)
             scope.launch {
                 try {
-                    TelemetryLogger.log(context.applicationContext, "BOOT", "Device rebooted, starting ForegroundService")
+                    BalanceRepository(context.applicationContext).initIfEmpty()
+                    TelemetryLogger.log(context.applicationContext, "BOOT", "Device rebooted, scheduled AccrualWorker")
                 } finally {
                     pendingResult.finish()
                 }
             }
-            context.startForegroundService(Intent(context, ForegroundService::class.java))
             // Re-schedule WorkManager tick — not guaranteed to survive reboot on all OEMs.
             AccrualWorker.schedule(context)
         }

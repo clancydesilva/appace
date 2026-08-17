@@ -64,7 +64,7 @@ class BalanceRepository(private val context: Context) {
 
     /**
      * Seeds the default [BalanceEntity] row on first launch if none exists.
-     * Called from [ForegroundService.onCreate] before any other repository operations.
+     * Called from [MainApplication.onCreate] before any other repository operations.
      */
     suspend fun initIfEmpty() = withContext(Dispatchers.IO) {
         mutex.withLock {

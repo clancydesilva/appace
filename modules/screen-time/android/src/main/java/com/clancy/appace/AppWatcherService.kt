@@ -1,6 +1,7 @@
 package com.clancy.appace
 
 import android.accessibilityservice.AccessibilityService
+import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Intent
@@ -12,9 +13,25 @@ import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.*
 
 class AppWatcherService : AccessibilityService() {
+    companion object {
+        const val CHANNEL_TRACKING = "appace_tracking"
+        const val TRACKING_NOTIFICATION_ID = 2
+    }
+
     private val repo by lazy { BalanceRepository(this) }
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val nm by lazy { getSystemService(NotificationManager::class.java) }
+
+    override fun onCreate() {
+        super.onCreate()
+        val notificationManager = getSystemService(NotificationManager::class.java)
+        notificationManager?.createNotificationChannel(
+            NotificationChannel(CHANNEL_TRACKING, "Live Balance", NotificationManager.IMPORTANCE_HIGH).apply {
+                description = "Shows remaining balance while a tracked app is in use"
+                setShowBadge(false)
+            }
+        )
+    }
 
     @Volatile private var currentTrackedApp: String? = null
     @Volatile private var lastDeductionTime: Long = 0
@@ -131,7 +148,7 @@ class AppWatcherService : AccessibilityService() {
         val pi = tapIntent?.let {
             PendingIntent.getActivity(this, 0, it, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         }
-        val notification = NotificationCompat.Builder(this, ForegroundService.CHANNEL_TRACKING)
+        val notification = NotificationCompat.Builder(this, CHANNEL_TRACKING)
             .setContentTitle(appLabel(pkg))
             .setContentText(timeText)
             .setSmallIcon(applicationInfo.icon)
@@ -140,7 +157,7 @@ class AppWatcherService : AccessibilityService() {
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .apply { pi?.let { setContentIntent(it) } }
             .build()
-        nm.notify(ForegroundService.TRACKING_NOTIFICATION_ID, notification)
+        nm.notify(TRACKING_NOTIFICATION_ID, notification)
     }
 
     /**
@@ -167,12 +184,12 @@ class AppWatcherService : AccessibilityService() {
         if (delayed) {
             pendingCancelJob = scope.launch {
                 delay(5_000)
-                nm.cancel(ForegroundService.TRACKING_NOTIFICATION_ID)
+                nm.cancel(TRACKING_NOTIFICATION_ID)
                 pendingCancelJob = null
             }
         } else {
             pendingCancelJob = null
-            nm.cancel(ForegroundService.TRACKING_NOTIFICATION_ID)
+            nm.cancel(TRACKING_NOTIFICATION_ID)
         }
     }
 
@@ -337,7 +354,6 @@ class AppWatcherService : AccessibilityService() {
 
             if (pkg == currentTrackedApp) { logRaw("tracked-same"); return }
             logRaw("tracked-switch")
-            startForegroundServiceIfNeeded()
             val prevApp = currentTrackedApp
             val deductFrom = lastDeductionTime
 
@@ -394,22 +410,6 @@ class AppWatcherService : AccessibilityService() {
         }
     }
 
-
-    private fun startForegroundServiceIfNeeded() {
-        try {
-            val serviceIntent = Intent(applicationContext, ForegroundService::class.java)
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                applicationContext.startForegroundService(serviceIntent)
-            } else {
-                applicationContext.startService(serviceIntent)
-            }
-        } catch (e: Exception) {
-            scope.launch {
-                TelemetryLogger.log(applicationContext, "SERVICE_START_ERR", "AppWatcherService failed to start service: ${e.message}")
-            }
-        }
-    }
-
     override fun onServiceConnected() {
         super.onServiceConnected()
         getPrefs().registerOnSharedPreferenceChangeListener(prefListener)
@@ -418,8 +418,6 @@ class AppWatcherService : AccessibilityService() {
 
         scope.launch {
             TelemetryLogger.log(applicationContext, "SERVICE_START", "AppWatcherService accessibility active")
-            startForegroundServiceIfNeeded()
-
             persistHeartbeat()  // Mark service alive so GapReconciler has a baseline
             if (foregroundPkg != null && foregroundPkg in getTrackedApps()) {
                 TelemetryLogger.log(applicationContext, "SERVICE_START", "Resumed tracking $foregroundPkg on reconnect")
