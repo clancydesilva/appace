@@ -1,4 +1,4 @@
-# Appace — Claude Code Rules
+# Appace — Gemini Code Rules
 
 ## Project
 
@@ -51,10 +51,9 @@ Every test run and debug cycle must be tracked to maintain a clean history of is
 
 ## Git — Required on Every Commit
 
-- Always read and follow the branching and testing instructions in `git_workflow.md` before merging or performing git operations. *(That file likely still documents the old dev/cherry-pick flow — worth a pass to bring it in line with this one.)*
 - Always work on a feature branch, never commit directly to `main`.
 - Branch naming depends on the type of work:
-  - New feature work: `phase/description` — e.g. `phase1/expo-scaffold`, `phase3/room-db`, `phase3/workmanager`
+  - New feature work: `phaseX/description`, X is the phase number — e.g. `phase9/emergency-topup`
   - Fixing/debugging an existing feature: `fix/description` — e.g. `fix/tick-double-accrual`
 - Run all available tests before every commit. Do not commit if tests fail.
 - Commit message format also depends on the type of work:
@@ -62,13 +61,26 @@ Every test run and debug cycle must be tracked to maintain a clean history of is
   - Fixing/debugging an existing feature: `[fix] short description`, no phase tag — e.g. `[fix] null check in tick() accrual loop`
 - After each commit, print a plain English summary of exactly what changed and why.
 - Keep commits small — one commit per logical unit. Never batch unrelated changes.
+- Branch off `main`, test and commit on the branch, then merge directly back into `main` once tests pass — no intermediate integration branch:
+
+```bash
+  git checkout main && git pull
+  git checkout -b fix/my-fix-description
+  # ...work, test, commit...
+  cd android && ./gradlew test && cd ..
+  npx tsc --noEmit
+  git checkout main
+  git merge fix/my-fix-description
+```
+
+- Before merging or switching branches, confirm a clean working tree with `git status` — use `git stash` to hold onto uncommitted changes temporarily, or `git restore .` to discard them.
 
 ## Branch Strategy
 
 - `main` — stable, working code only
-- `phaseX/` - work on new feature, X is the phase number
-- `fix/...` - fixing or debugging something already built, regardless of which phase it originally belonged to
-- Merge to `main` once the work is verified and tests pass — a full phase for `phase/` branches, the specific issue for `fix/` branches.
+- `phaseX/...` — new feature work, X is the phase number
+- `fix/...` — fixing or debugging something already built, regardless of which phase it originally belonged to
+- Merge to `main` once the work is verified and tests pass — a full phase for `phaseX/` branches, the specific issue for `fix/` branches.
 
 ## Testing
 
