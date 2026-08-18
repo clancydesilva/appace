@@ -1,13 +1,7 @@
 {
   "markdown.validate.enabled": false,
-  "markdown.validate.fileLinks.enabled": false,
-  "markdown.validate.fragmentLinks.enabled": false,
-  "markdown.validate.referenceLinks.enabled": false,
-  "markdown.validate.ignoredLinks": ["*"],
-  "markdownlint.ignore": ["**/*.md"],
-  "markdownlint.config": {
-    "default": false
-  },
-  "cSpell.enabled": false,
-  "cSpell.enableFiletypes": ["!markdown"]
+  "markdown.validate.fileLinks.enabled": "off",
+  "markdown.validate.fragmentLinks.enabled": "off",
+  "markdown.validate.referenceLinks.enabled": "off",
+  "markdown.validate.ignoredLinks": ["*"]
 }
