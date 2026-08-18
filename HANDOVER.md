@@ -1,9 +1,9 @@
 # Appace — Codebase Context & Project Handover
 
 > **Package**: `com.clancy.appace`  
-> **Stack**: React Native + Expo SDK 54 + Kotlin Native Module (`screen-time`) + Room DB (v4) + Accessibility Service + Foreground Service + UsageStatsManager + WorkManager  
-> **Current Branch**: `main` (commit `596330c`)  
-> **Latest Build**: `appace-bug-test-15.apk`  
+> **Stack**: React Native + Expo SDK 54 + Kotlin Native Module (`screen-time`) + Room DB (v4) + Accessibility Service + UsageStatsManager + WorkManager  
+> **Current Version**: `0.7.0` (versionCode `70`)  
+> **Branch**: `main`  
 
 ---
 
@@ -29,8 +29,8 @@ Appace is an Android screen time management app designed around positive reinfor
 ```
 
 The system operates via three main background layers:
-1. **Accessibility Engine (`AppWatcherService`)**: Monitors active foreground window events (`TYPE_WINDOW_STATE_CHANGED`), executes smooth projected timer countdowns, and triggers redirection to Appace Dashboard instantly when screen time expires.
-2. **Accrual & Reset Engine (`BalanceRepository`)**: Manages hourly time drops during active earning windows, daily midnight resets, and thread-safe Room DB operations.
+1. **Accessibility Engine (`AppWatcherService`)**: Monitors active foreground window events (`TYPE_WINDOW_STATE_CHANGED`), executes smooth projected timer countdowns, posts/dismisses the live status bar notification directly, and triggers redirection to Appace Dashboard instantly when screen time expires.
+2. **Accrual & Reset Engine (`BalanceRepository` + `AccrualWorker`)**: Manages hourly time drops during active earning windows, daily midnight resets, and thread-safe Room DB operations via a 15-minute periodic WorkManager worker.
 3. **Process-Death Backstop (`GapReconciler`)**: Reconciles untracked foreground usage missed during OS process kills/crashes using Android's `UsageStatsManager`.
 
 ---
@@ -42,7 +42,8 @@ The system operates via three main background layers:
 * **Responsibilities**:
   * **Event Monitoring**: Filters Android `AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED` events to identify the current foreground application package.
   * **Projection Loop (`runTrackingLoop`)**: Updates ongoing notification live countdown every 1 second via projected wall-clock time (`lastKnownBalance - elapsed`), and writes real deductions to Room DB every 5 seconds.
-  * **Direct Blocking (Option A)**: Launches Appace Dashboard directly over the blocked app using `Intent.FLAG_ACTIVITY_NEW_TASK or FLAG_ACTIVITY_CLEAR_TOP` without flashing the Android Home Screen.
+  * **Live Notification Management**: Directly creates and manages the `appace_tracking` notification channel and posts `TRACKING_NOTIFICATION_ID = 2` only while a tracked app is active, dismissing it on exit.
+  * **Direct Blocking**: Launches Appace Dashboard directly over the blocked app using `Intent.FLAG_ACTIVITY_NEW_TASK or FLAG_ACTIVITY_CLEAR_TOP` without flashing the Android Home Screen.
   * **TikTok Continuous Scroll Guard**: Executes an inline `rootInActiveWindow` check inside `graceJob` before state wipe; if the target app is still foreground, grace is extended silently without tracking drop.
   * **Heartbeat Persistence**: Writes wall-clock `last_heartbeat_ms` to `SharedPreferences` every 5-second deduction cycle and on service connect.
 
@@ -54,7 +55,7 @@ The system operates via three main background layers:
 
 ---
 
-## 2. Accrual & Reset Repository (`BalanceRepository.kt`)
+### B. Accrual & Reset Repository (`BalanceRepository.kt`)
 * **Location**: `modules/screen-time/android/src/main/java/com/clancy/appace/BalanceRepository.kt`
 * **Responsibilities**:
   * **Model B Opening Grant**: At active window start (e.g. 6:00 AM), grants **both** the Opening Balance **and** the start-hour accrual (`lastAccrualHour = windowStartHour - 1`). For example, 5m opening + 5m 6am drop = 10m total at 6:00 AM.
@@ -67,18 +68,18 @@ The system operates via three main background layers:
 ### C. Process Death Reconciliation (`GapReconciler.kt`)
 * **Location**: `modules/screen-time/android/src/main/java/com/clancy/appace/GapReconciler.kt`
 * **Responsibilities**:
-  * **Room DB Schema v4**: Introduces `ReconciliationEntity` singleton row (`lastHeartbeatMs`, `lastReconciledMs`).
+  * **Room DB Schema v4**: Uses `ReconciliationEntity` singleton row (`lastHeartbeatMs`, `lastReconciledMs`).
   * **Execution Triggers**: Called by `AccrualWorker` (15-minute periodic WorkManager) and `BootReceiver` (re-scheduled on reboot).
   * **Usage Stats Query**: Queries `UsageStatsManager.queryEvents()` for window `[lastReconciledMs, now - 5min]`. Uses SDK-gated `ACTIVITY_RESUMED`/`PAUSED` event types (API 29+) with API 24–28 fallback.
+  * **Graceful Soft-Fail**: If `PACKAGE_USAGE_STATS` is not granted, logs `RECONCILE_SKIPPED` and safely returns without crashing.
   * **Retroactive Deduction**: Deducts lost foreground screen time for tracked apps and logs `RAW_EVENT RECONCILE` to SQLite telemetry.
 
 ---
 
-### D. Ongoing Foreground Service (`ForegroundService.kt`)
-* **Location**: `modules/screen-time/android/src/main/java/com/clancy/appace/ForegroundService.kt`
-* **Responsibilities**:
-  * Holds `TRACKING_NOTIFICATION_ID = 1` active in Android System UI, keeping the app process warm in RAM (~50 MB).
-  * **Self-Healing Loop**: `AppWatcherService` and `AccrualWorker` ensure `ForegroundService` is restarted if killed by OS low-memory events.
+### D. Periodic Accrual & Startup Lifecycle (`AccrualWorker.kt`, `BootReceiver.kt`, `MainApplication.kt`)
+* **`MainApplication.kt`**: Initializes `BalanceRepository.initIfEmpty()` and ensures `AccrualWorker.schedule(this)` on application launch.
+* **`BootReceiver.kt`**: Listens for `ACTION_BOOT_COMPLETED`, initializes repository state, and re-schedules `AccrualWorker`.
+* **`AccrualWorker.kt`**: 15-minute periodic WorkManager worker executing `BalanceRepository.tick()` and `GapReconciler.reconcile()`.
 
 ---
 
@@ -91,12 +92,12 @@ The system operates via three main background layers:
 ---
 
 ### F. React Native Frontend & State Management
-* **Store (`store/useTimerStore.ts`)**: Zustand store interfacing with `ExpoScreenTime` native module for balance, settings, tracked apps, and accessibility checks.
+* **Store (`store/useTimerStore.ts`)**: Zustand store interfacing with `ExpoScreenTime` native module for balance, settings, tracked apps, permissions checks, and telemetry logs.
 * **Screens (`app/`)**:
-  * `onboarding.tsx`: 5-step setup flow (Welcome, Preset Selection, Accessibility Permission, Notification Permission, Complete).
+  * `onboarding.tsx`: 7-step setup flow (1. Welcome, 2. Budget Presets, 3. Accessibility Disclosure & Permission, 4. Usage Access Disclosure & Permission, 5. Battery Optimization, 6. Notifications, 7. Tracked Apps Selection).
   * `(tabs)/index.tsx`: Home balance display with live countdown ring and earning window indicators.
   * `(tabs)/apps.tsx`: Tracked apps drawer with alphabetical sorting, uninstalled app filtering, and non-jumping row updates via `baselineTrackedApps`.
-  * `(tabs)/settings.tsx`: Configuration screen with Rule Presets (Standard, Custom, locked Compounding tab), live previews, and explicit batch save ("Confirm Changes").
+  * `(tabs)/settings.tsx`: Configuration screen with Rule Presets, live previews, System Permissions cards (with re-grant disclosure modals), and explicit batch save ("Confirm Changes").
 
 ---
 
@@ -115,7 +116,7 @@ The system operates via three main background layers:
 
 ---
 
-## 4. Build Configuration & Optimizations
+## 4. Build Configuration & Manifest Permissions
 
 * **Gradle JVM Heap Settings** (`android/gradle.properties`):
   ```properties
@@ -124,10 +125,11 @@ The system operates via three main background layers:
   org.gradle.parallel=false
   ```
 * **Android Manifest Permissions** (`android/app/src/main/AndroidManifest.xml`):
-  * `PACKAGE_USAGE_STATS` (for `GapReconciler` process recovery)
-  * `WAKE_LOCK` (for dev client and worker tasks)
-  * `POST_NOTIFICATIONS` (Android 13+ live notification permission)
+  * `PACKAGE_USAGE_STATS` (for `GapReconciler` process recovery; accompanied by in-app prominent disclosure)
+  * `POST_NOTIFICATIONS` (Android 13+ live tracking notification permission)
+  * `RECEIVE_BOOT_COMPLETED` (re-schedule WorkManager after device reboot)
   * `android:allowBackup="false"` (ensures fresh reinstalls present onboarding)
+  * `<queries>` (restricted intent filters for launcher and browser intents; no `QUERY_ALL_PACKAGES`)
 
 ---
 
@@ -150,13 +152,12 @@ cd android; .\gradlew test
 # 2. Run TypeScript type check
 npx tsc --noEmit
 
-# 3. Assemble Debug APK (APK 15)
-cd android; .\gradlew assembleDebug --quiet
-Copy-Item "app\build\outputs\apk\debug\app-debug.apk" "..\appace-bug-test-15.apk" -Force
+# 3. Assemble Release APK
+cd android; .\gradlew assembleRelease
+Copy-Item "app\build\outputs\apk\release\app-release.apk" "..\apks\appace-0.7.0.apk" -Force
 
-# 4. Perform fresh reinstall on connected Android device
-adb uninstall com.clancy.appace
-adb install appace-bug-test-15.apk
+# 4. Install & launch on connected Android device
+adb install -r apks\appace-0.7.0.apk
 adb shell am start -n com.clancy.appace/.MainActivity
 
 # 5. Inspect Telemetry Logs on device via SQLite

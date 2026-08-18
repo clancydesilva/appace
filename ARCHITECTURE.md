@@ -1,6 +1,6 @@
 # Appace — Architecture Overview
 
-> Last updated: 2026-08  
+> Last updated: 2026-08 (v0.7.0)  
 > Package: `com.clancy.appace`  
 > Stack: TypeScript (React Native / Expo), Kotlin (native module), Room DB, WorkManager, Accessibility Service
 
@@ -22,7 +22,7 @@
 │     ExpoScreenTimeModule (Kotlin, Expo Modules)   │
 │  Exposes async functions callable from JS:        │
 │  getBalance, getSettings, setSettings,            │
-│  getTelemetryLog, startAccrualWorker, etc.        │
+│  getTelemetryLogs, checkUsageAccess, etc.         │
 └──────┬────────────────────────┬──────────────────┘
        │                        │
 ┌──────▼────────┐   ┌───────────▼──────────────────┐
@@ -34,21 +34,15 @@
 └──────┬────────┘
        │
 ┌──────▼────────────────────────────────────────────┐
-│  Android Services (always-on, Kotlin)              │
+│  Android OS & Background Services (Kotlin)         │
 │                                                    │
 │  ┌─────────────────────────────────────────────┐  │
 │  │ AppWatcherService (AccessibilityService)    │  │
 │  │  • TYPE_WINDOW_STATE_CHANGED events         │  │
 │  │  • runTrackingLoop (drain loop, 1s ticks)   │  │
+│  │  • Owns live tracking countdown notification│  │
 │  │  • launchGraceJob (5s grace on app-switch)  │  │
 │  │  • persistHeartbeat (GapReconciler baseline)│  │
-│  └────────────────────────┬────────────────────┘  │
-│                           │                        │
-│  ┌────────────────────────▼────────────────────┐  │
-│  │ ForegroundService                           │  │
-│  │  • FOREGROUND_SERVICE_TYPE_SPECIAL_USE      │  │
-│  │  • Keeps process alive (OEM kill prevention)│  │
-│  │  • Exposes notification channel             │  │
 │  └─────────────────────────────────────────────┘  │
 │                                                    │
 │  ┌─────────────────────────────────────────────┐  │
@@ -58,8 +52,8 @@
 │  └─────────────────────────────────────────────┘  │
 │                                                    │
 │  ┌─────────────────────────────────────────────┐  │
-│  │ BootReceiver                                │  │
-│  │  • Restarts services after device reboot    │  │
+│  │ BootReceiver & MainApplication              │  │
+│  │  • Seeds repository & schedules workers     │  │
 │  └─────────────────────────────────────────────┘  │
 └───────────────────────────────────────────────────┘
 ```
@@ -71,7 +65,7 @@
 1. User opens a tracked app → OS fires `TYPE_WINDOW_STATE_CHANGED`.
 2. `AppWatcherService.onAccessibilityEvent()` receives the event, identifies the package as tracked.
 3. `runTrackingLoop(pkg)` launches as a coroutine on `Dispatchers.IO`.
-4. Every **1 second**: the drain loop projects the balance locally (no DB read).
+4. Every **1 second**: the drain loop projects the balance locally and updates the status bar notification.
 5. Every **5 seconds**: a real `BalanceRepository.deductIfInWindow(elapsed)` call writes to Room.
    - `persistHeartbeat()` is also written, so `GapReconciler` can detect any subsequent gap.
 6. When balance hits 0 or the user leaves: `launchAppaceDashboard()` / deduction committed.
@@ -119,12 +113,18 @@ This prevents false deductions from notification shade swipes and brief OS overl
 ```
 app/                       Expo Router screens
   (tabs)/index.tsx         Main balance screen (drain + refetch loops)
-  (tabs)/settings.tsx      Settings screen
-  onboarding.tsx           Multi-step onboarding flow
+  (tabs)/apps.tsx          Tracked apps drawer & configuration
+  (tabs)/settings.tsx      Settings screen & permissions management
+  onboarding.tsx           7-step onboarding flow
   privacy.tsx              Privacy policy screen
 
 components/
-  onboarding/              Onboarding step components
+  onboarding/              Onboarding step components (Steps 1 to 7)
+  settings/                Settings screen components (PermissionsStatus, etc.)
+  AccessibilityDisclosure.tsx       Prominent disclosure for Accessibility
+  AccessibilityDisclosureModal.tsx  Modal wrapper for Accessibility disclosure
+  UsageAccessDisclosure.tsx         Prominent disclosure for Usage Access
+  UsageAccessDisclosureModal.tsx    Modal wrapper for Usage Access disclosure
   ErrorBoundary.tsx        Top-level React error boundary
 
 store/
@@ -140,8 +140,7 @@ modules/screen-time/       Expo native module
     ExpoScreenTime.types.ts    Shared TypeScript interfaces (JSDoc annotated)
   android/src/main/java/com/clancy/appace/
     ExpoScreenTimeModule.kt    Native async function implementations (JS bridge)
-    AppWatcherService.kt       Accessibility service (real-time tracking)
-    ForegroundService.kt       Foreground service (process keep-alive)
+    AppWatcherService.kt       Accessibility service (real-time tracking & live notification)
     AccrualWorker.kt           WorkManager periodic worker
     BootReceiver.kt            Boot-completed receiver
     BalanceRepository.kt       Core business logic (tick, deduct, settings)
@@ -168,9 +167,10 @@ adr/                       Architecture Decision Records
 | All Room access on `Dispatchers.IO` | `withContext(Dispatchers.IO)` in every repository method |
 | No TOCTOU on window-check + deduct | `deductIfInWindow()` acquires `Mutex` before both operations |
 | `tick()` is idempotent | `lastAccrualHour`, `windowOpenGrantedToday`, `lastResetDate` guards |
-| WorkManager uniqueness | `enqueueUniquePeriodicWork` with `KEEP` policy in `ExpoScreenTimeModule` |
+| WorkManager uniqueness | `enqueueUniquePeriodicWork` with `KEEP` policy in `AccrualWorker` |
 | No notifications for hourly accruals | Accrual is always silent — only live tracking shows a notification |
 | No `QUERY_ALL_PACKAGES` | `<queries>` intent filter used instead for launcher app list |
+| Zero Foreground Service permissions | Android OS binds to AccessibilityService directly; eliminates FGS policy risk |
 
 ---
 
@@ -178,7 +178,7 @@ adr/                       Architecture Decision Records
 
 | Risk | Status | Mitigation |
 |---|---|---|
-| AccessibilityService policy compliance | Active risk | See `appace-playstore-compliance-log.md` |
+| AccessibilityService policy compliance | Managed | Prominent disclosures in place; declaration form + video required |
 | Android 17 Advanced Protection Mode | Future risk | UsageStatsManager fallback path planned |
-| OEM process killing (Samsung, Xiaomi) | Mitigated | ForegroundService + GapReconciler recovery |
+| OEM process killing (Samsung, Xiaomi) | Mitigated | OS-managed Accessibility Service + GapReconciler recovery |
 | UsageStats 5-min recency blackout | Accepted | GapReconciler truncates window by TRUNCATION_SAFETY_MS |

@@ -13,13 +13,14 @@ This document tracks the Google Play Store policy status of all permissions, fea
 
 Following a full codebase audit comparing the actual implementation against Google Play Developer Program Policies (including Android 14/15/16 policy updates and Android 17 Advanced Protection Mode considerations), the findings are summarized below.
 
-### Key Audit Findings
-1. **Discrepancy in `PACKAGE_USAGE_STATS`:** The previous log stated `StepUsageAccess` in onboarding explains this permission. **In reality, `StepUsageAccess` does not exist in the codebase.** The permission is declared in `AndroidManifest.xml` and used by `GapReconciler.kt`, but there is currently no user-facing UI or runtime flow to request/explain it.
-2. **AccessibilityService Configuration Overscoping:** `accessibility_service_config.xml` includes `flagReportViewIds` (completely unused) and `canRetrieveWindowContent="true"` (Appace only reads `rootInActiveWindow.packageName` for grace checks). Pruning unused flags reduces policy scrutiny.
-3. **Foreground Service Policy & Risk Elevation:** `ForegroundService.kt` employs a `startForeground(...)` followed immediately by `stopForeground(STOP_FOREGROUND_REMOVE)` pattern. Under Android 14+ FGS policy, foreground services must keep a visible notification while executing, and background launches from WorkManager can trigger `ForegroundServiceStartNotAllowedException`. FGS risk is elevated to **MEDIUM-HIGH**.
-4. **Battery Optimization Compliance Verified:** Appace does not request the restricted `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` manifest permission; it opens system settings via `ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS` (`✅ Compliant`).
-5. **No `INTERNET` Permission:** The app does not declare `android.permission.INTERNET`, providing ironclad proof for offline Data Safety claims (`✅ Verified`).
-6. **Package Visibility Verified:** Uses `<queries>` intent filters instead of `QUERY_ALL_PACKAGES` (`✅ Compliant`).
+### Codebase Remediation Status (v0.7.0)
+1. **`PACKAGE_USAGE_STATS` Prominent Disclosure (Resolved):** `StepUsageAccess.tsx` has been implemented in onboarding (Step 4) alongside `UsageAccessDisclosureModal.tsx` in Settings, featuring plain-language disclosure, affirmative checkbox consent, and skip/soft-fail support.
+2. **AccessibilityService Configuration Pruning (Resolved):** `accessibility_service_config.xml` has been pruned to remove unused `flagReportViewIds`, retaining only `flagDefault|flagRetrieveInteractiveWindows`.
+3. **Foreground Service Removal (Resolved):** Redundant `ForegroundService.kt` and manifest permissions (`FOREGROUND_SERVICE` and `FOREGROUND_SERVICE_SPECIAL_USE`) were removed. `AppWatcherService` is managed directly by Android OS, and periodic tasks are handled by WorkManager, eliminating FGS policy risk completely.
+4. **Accessibility Prominent Disclosure Consistency (Resolved):** `AccessibilityDisclosureModal.tsx` was implemented for Settings and dashboard warning banners, ensuring 100% of routes to Accessibility Settings display disclosure + consent.
+5. **Battery Optimization Compliance Verified:** Appace does not request the restricted `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` manifest permission; it opens system settings via `ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS` (`✅ Compliant`).
+6. **No `INTERNET` Permission:** The app does not declare `android.permission.INTERNET`, providing ironclad proof for offline Data Safety claims (`✅ Verified`).
+7. **Package Visibility Verified:** Uses `<queries>` intent filters instead of `QUERY_ALL_PACKAGES` (`✅ Compliant`).
 
 ---
 
@@ -34,18 +35,18 @@ Following a full codebase audit comparing the actual implementation against Goog
 - **Behavior:** The service is strictly read-only. It performs no gestures, extracts no text content, and intercepts no keystrokes.
 - **Config (`accessibility_service_config.xml`):**
   - `accessibilityEventTypes="typeWindowStateChanged"`
-  - `accessibilityFlags="flagDefault|flagReportViewIds|flagRetrieveInteractiveWindows"`
+  - `accessibilityFlags="flagDefault|flagRetrieveInteractiveWindows"`
   - `canRetrieveWindowContent="true"`
   - `description="@string/accessibility_description"`
 
 #### Policy Risks & Findings
 1. **Core Use Case Policy:** Google Play policy mandates that Accessibility Services should be reserved for apps providing accessibility functionality to users with disabilities. Digital wellbeing / screen time apps do not fall under standard qualifying exemptions and frequently face rejection unless granted an exception via the **Accessibility Declaration Form**.
-2. **Config Overscoping:**
-   - `flagReportViewIds` is enabled in XML but never utilized in code.
-   - `canRetrieveWindowContent="true"` is declared. While `AppWatcherService` accesses `rootInActiveWindow?.packageName` during grace period checks, declaring full window content access while claiming "no screen content is read" triggers heightened scrutiny during manual review.
+2. **Config Scope:**
+   - `flagReportViewIds` has been pruned from XML.
+   - `canRetrieveWindowContent="true"` is retained solely for `rootInActiveWindow?.packageName` during grace period checks.
 3. **Prominent Disclosure Implementation:**
-   - ✅ `StepAccessibility.tsx` provides a prominent in-app disclosure with an explicit user consent checkbox prior to directing the user to system settings.
-   - ⚠️ `PermissionsStatus.tsx` in Settings links directly to `ACTION_ACCESSIBILITY_SETTINGS` without showing the prominent disclosure dialog first if re-enabled later.
+   - ✅ `StepAccessibility.tsx` provides a prominent in-app disclosure with an explicit user consent checkbox prior to directing the user to system settings during onboarding.
+   - ✅ `PermissionsStatus.tsx` in Settings and the Home Screen warning banner display `AccessibilityDisclosureModal.tsx` before routing to `ACTION_ACCESSIBILITY_SETTINGS`.
 4. **Android 17 Advanced Protection Mode (APM):**
    - Starting in Android 17, APM will block Accessibility Services at the OS level for apps that are not certified assistive tools, regardless of Play Store distribution status.
 
@@ -172,4 +173,4 @@ Following a full codebase audit comparing the actual implementation against Goog
 ---
 
 ## Summary of Code Status
-All 4 codebase compliance fixes (Phases A, B, C, and D) are implemented, verified with TypeScript and Kotlin unit tests, and committed on the `compliance` branch. Outstanding non-code tasks before submission are: (1) public hosting of Privacy Policy URL, (2) Accessibility declaration video recording, and (3) Play Console form submissions.
+All 4 codebase compliance fixes (Phases A, B, C, and D) are implemented, verified with TypeScript and Kotlin unit tests, and merged into `main` (v0.7.0). Outstanding non-code tasks before submission are: (1) public hosting of Privacy Policy URL, (2) Accessibility declaration video recording, and (3) Play Console form submissions.

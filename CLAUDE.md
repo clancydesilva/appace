@@ -1,4 +1,4 @@
-# Appace — Gemini Code Rules
+# Appace — Claude Code Rules
 
 ## Project
 
