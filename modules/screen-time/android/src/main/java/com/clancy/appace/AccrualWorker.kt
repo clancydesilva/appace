@@ -27,6 +27,23 @@ class AccrualWorker(context: Context, params: WorkerParameters)
                     TelemetryLogger.log(applicationContext, "RAW_EVENT", "RECONCILE_ERR: ${e.message}")
                 }
 
+                // Multi-group tick — runs all configured app groups through the same
+                // reset / opening-grant / accrual sequence as the single-balance tick.
+                // Isolated so a group-engine error never fails the legacy tick above.
+                try {
+                    GroupBalanceRepository(applicationContext).tick()
+                } catch (e: Exception) {
+                    TelemetryLogger.log(applicationContext, "WORKER_ERR", "GroupTick failed: ${e.message}")
+                }
+
+                // Multi-group gap reconciler — attributes UsageStats foreground time
+                // per group while the accessibility service was not running.
+                try {
+                    GapReconciler.reconcileGroups(applicationContext)
+                } catch (e: Exception) {
+                    TelemetryLogger.log(applicationContext, "RAW_EVENT", "GROUP_RECONCILE_ERR: ${e.message}")
+                }
+
                 Result.success()
             } catch (e: Exception) {
                 TelemetryLogger.log(applicationContext, "WORKER_ERR", "AccrualWorker failed: ${e.message ?: "unknown"}")

@@ -111,8 +111,7 @@ object GapReconciler {
         val totalForegroundSeconds = totalForegroundMs / 1000L
 
         if (totalForegroundSeconds > 0) {
-            // TODO(group-budgets): split by package→group once per-group balances land.
-            // Currently deductIfInWindow is a flat scalar on a single BalanceEntity row.
+            // Legacy single-balance deduction — kept for the balance table throughout Phase 8.1/8.2.
             BalanceRepository(context).deductIfInWindow(totalForegroundSeconds)
         }
 
@@ -124,6 +123,99 @@ object GapReconciler {
 
         // Advance reconciled cursor — idempotency guard for next run.
         reconcileDao.upsert(row.copy(lastReconciledMs = windowEnd))
+    }
+
+    /**
+     * Multi-group counterpart to [reconcile].
+     *
+     * Queries [UsageStatsManager] for foreground events in `[lastReconciledMs, now - TRUNCATION_SAFETY_MS]`,
+     * resolves each package to its owning group via [AppGroupDao], aggregates foreground seconds per group,
+     * and deducts from each group's balance via [GroupBalanceRepository.deductFromGroup].
+     *
+     * The reconciliation cursor ([ReconciliationEntity.lastReconciledMs]) is shared with [reconcile] —
+     * both functions read the same window end. Only [reconcile] advances the cursor; this function
+     * reads the cursor but does not update it, so the two can be called in sequence without skipping events.
+     *
+     * If no groups are configured or the UsageStats permission is not granted, returns immediately.
+     *
+     * **Permission**: requires `PACKAGE_USAGE_STATS` granted via Settings → Usage Access.
+     */
+    suspend fun reconcileGroups(context: Context) = withContext(Dispatchers.IO) {
+        val db = AppDatabase.getInstance(context)
+        val reconcileDao = db.reconciliationDao()
+
+        val row = reconcileDao.get() ?: ReconciliationEntity()
+        val windowStart = row.lastReconciledMs
+        val windowEnd = System.currentTimeMillis() - TRUNCATION_SAFETY_MS
+
+        if (windowEnd - windowStart < 1_000L) return@withContext
+        if (!hasUsageStatsPermission(context)) return@withContext
+
+        // Build package → groupId map from the groups DAO.
+        val allMemberships = db.appGroupDao().getAllMemberships()
+        if (allMemberships.isEmpty()) return@withContext
+
+        val packageToGroup = allMemberships.associate { it.packageName to it.groupId }
+
+        val resumeEvent: Int
+        val pauseEvent: Int
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            resumeEvent = UsageEvents.Event.ACTIVITY_RESUMED
+            pauseEvent = UsageEvents.Event.ACTIVITY_PAUSED
+        } else {
+            @Suppress("DEPRECATION")
+            resumeEvent = UsageEvents.Event.MOVE_TO_FOREGROUND
+            @Suppress("DEPRECATION")
+            pauseEvent = UsageEvents.Event.MOVE_TO_BACKGROUND
+        }
+
+        val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
+            ?: return@withContext
+
+        val events = usm.queryEvents(windowStart, windowEnd)
+        val foregroundStarts = mutableMapOf<String, Long>()        // pkg → resume timestamp
+        val groupForegroundMs = mutableMapOf<Int, Long>()          // groupId → total ms
+
+        while (events.hasNextEvent()) {
+            val event = UsageEvents.Event()
+            events.getNextEvent(event)
+            val pkg = event.packageName ?: continue
+            val groupId = packageToGroup[pkg] ?: continue           // untracked package — skip
+
+            when (event.eventType) {
+                resumeEvent -> foregroundStarts[pkg] = event.timeStamp
+                pauseEvent -> {
+                    val start = foregroundStarts.remove(pkg) ?: continue
+                    val elapsed = event.timeStamp - start
+                    groupForegroundMs[groupId] = (groupForegroundMs[groupId] ?: 0L) + elapsed
+                }
+            }
+        }
+
+        // Apps still resumed at windowEnd (gap ended mid-session).
+        for ((pkg, start) in foregroundStarts) {
+            val groupId = packageToGroup[pkg] ?: continue
+            val elapsed = windowEnd - start
+            groupForegroundMs[groupId] = (groupForegroundMs[groupId] ?: 0L) + elapsed
+        }
+
+        if (groupForegroundMs.isEmpty()) return@withContext
+
+        val groupRepo = GroupBalanceRepository(context)
+        val logParts = mutableListOf<String>()
+        for ((groupId, ms) in groupForegroundMs) {
+            val seconds = ms / 1_000L
+            if (seconds > 0) {
+                groupRepo.deductFromGroup(groupId, seconds)
+                logParts.add("group=$groupId ${seconds}s")
+            }
+        }
+
+        TelemetryLogger.log(
+            context,
+            "RAW_EVENT",
+            "GROUP_RECONCILE gap=${windowEnd - windowStart}ms ${logParts.joinToString(" | ")}"
+        )
     }
 
     private fun hasUsageStatsPermission(context: Context): Boolean {
@@ -140,3 +232,4 @@ object GapReconciler {
         }
     }
 }
+

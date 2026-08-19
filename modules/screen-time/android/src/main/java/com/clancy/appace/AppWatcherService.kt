@@ -19,6 +19,7 @@ class AppWatcherService : AccessibilityService() {
     }
 
     private val repo by lazy { BalanceRepository(this) }
+    private val groupRepo by lazy { GroupBalanceRepository(this) }
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val nm by lazy { getSystemService(NotificationManager::class.java) }
 
@@ -44,6 +45,14 @@ class AppWatcherService : AccessibilityService() {
     private val prefListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         if (key == "tracked_apps") cachedTrackedApps = null
     }
+
+    // Group membership cache: rebuilt on service connect and on any membership change.
+    // Maps package name → groupId for O(1) lookup during every accessibility event.
+    @Volatile private var packageToGroupId: Map<String, Int> = emptyMap()
+    // Maps groupId → group name for notification display.
+    @Volatile private var groupIdToName: Map<Int, String> = emptyMap()
+    // Tracks the groupId currently being drained (null when tracking via legacy single-balance).
+    @Volatile private var currentGroupId: Int? = null
 
     // Heartbeat: written every 5-second real deduction tick and on service connect.
     // GapReconciler reads this to detect the gap window after a process death.
@@ -95,6 +104,28 @@ class AppWatcherService : AccessibilityService() {
         return fresh
     }
 
+    /**
+     * Rebuilds the in-memory package→groupId and groupId→name caches from Room.
+     * Called once on [onServiceConnected] and whenever group membership changes.
+     * Runs on the IO dispatcher inside a coroutine — safe to call from any context.
+     */
+    private fun refreshGroupCache() {
+        scope.launch {
+            try {
+                val dao = AppDatabase.getInstance(this@AppWatcherService).appGroupDao()
+                val memberships = dao.getAllMemberships()
+                val groups = dao.getAllGroups()
+                packageToGroupId = memberships.associate { it.packageName to it.groupId }
+                groupIdToName = groups.associate { it.id to it.name }
+            } catch (e: Exception) {
+                TelemetryLogger.log(applicationContext, "RAW_EVENT", "GroupCacheRefreshFailed: ${e.message}")
+            }
+        }
+    }
+
+    /** Returns the groupId for [pkg] if it belongs to a group, or null if untracked/legacy. */
+    private fun getGroupIdForApp(pkg: String): Int? = packageToGroupId[pkg]
+
     private fun isInputMethod(pkg: String): Boolean {
         // Fast path: package was already confirmed as an IME in a prior event
         if (pkg in knownImePackages) return true
@@ -137,10 +168,19 @@ class AppWatcherService : AccessibilityService() {
         try { packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString() }
         catch (e: Exception) { pkg }
 
-    private fun buildTrackingNotification(pkg: String, balanceSeconds: Long) {
+    /**
+     * Posts or refreshes the live-balance notification.
+     *
+     * @param pkg            Package name of the app being tracked.
+     * @param balanceSeconds Remaining balance in seconds (from the group or legacy pool).
+     * @param groupName      If non-null, displayed in the title as "[App] ([Group Name])".
+     */
+    private fun buildTrackingNotification(pkg: String, balanceSeconds: Long, groupName: String? = null) {
         val m = balanceSeconds / 60
         val s = balanceSeconds % 60
         val timeText = if (m > 0) "${m}m ${s}s remaining" else "${s}s remaining"
+
+        val title = if (groupName != null) "${appLabel(pkg)} ($groupName)" else appLabel(pkg)
 
         val tapIntent = packageManager.getLaunchIntentForPackage(packageName)?.apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
@@ -149,7 +189,7 @@ class AppWatcherService : AccessibilityService() {
             PendingIntent.getActivity(this, 0, it, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         }
         val notification = NotificationCompat.Builder(this, CHANNEL_TRACKING)
-            .setContentTitle(appLabel(pkg))
+            .setContentTitle(title)
             .setContentText(timeText)
             .setSmallIcon(applicationInfo.icon)
             .setOngoing(true)        // user cannot swipe away
@@ -164,14 +204,14 @@ class AppWatcherService : AccessibilityService() {
      * Post or update the tracking notification.
      * Aborts any pending delayed cancellation — e.g. user re-opens tracked app within 5s grace.
      */
-    private fun postTrackingNotification(pkg: String, balanceSeconds: Long) {
+    private fun postTrackingNotification(pkg: String, balanceSeconds: Long, groupName: String? = null) {
         pendingCancelJob?.cancel()
         pendingCancelJob = null
-        buildTrackingNotification(pkg, balanceSeconds)
+        buildTrackingNotification(pkg, balanceSeconds, groupName)
     }
 
-    private fun updateTrackingNotification(pkg: String, balanceSeconds: Long) =
-        buildTrackingNotification(pkg, balanceSeconds)
+    private fun updateTrackingNotification(pkg: String, balanceSeconds: Long, groupName: String? = null) =
+        buildTrackingNotification(pkg, balanceSeconds, groupName)
 
     /**
      * Cancel the tracking notification.
@@ -195,11 +235,40 @@ class AppWatcherService : AccessibilityService() {
 
     // --- Drain loop ---
 
-    private suspend fun runTrackingLoop(pkg: String) {
-        if (repo.isAccrualNeeded()) {
-            repo.tick()
+    /**
+     * Core drain loop for a tracked app.
+     *
+     * If [pkg] belongs to a group, deductions go to [GroupBalanceRepository.deductFromGroup]
+     * and block decisions use that group's balance. Otherwise falls back to the legacy
+     * [BalanceRepository.deductIfInWindow] for apps tracked via SharedPrefs only.
+     *
+     * @param pkg      Package being tracked.
+     * @param groupId  The group this package belongs to, or null for legacy single-balance tracking.
+     */
+    private suspend fun runTrackingLoop(pkg: String, groupId: Int?) {
+        val groupName = groupId?.let { groupIdToName[it] }
+
+        // Run accrual tick before the initial block-check so a just-unlocked hour isn't missed.
+        if (repo.isAccrualNeeded()) repo.tick()
+        if (groupId != null) groupRepo.tick()
+
+        // Check for zero balance before starting the loop.
+        val initialBalance = if (groupId != null) {
+            groupRepo.getGroup(groupId)?.balanceSeconds ?: 0L
+        } else {
+            repo.getBalance().balanceSeconds
         }
-        if (!repo.hasTimeRemaining() && repo.isWithinWindow()) {
+        val inWindow = if (groupId != null) {
+            val g = groupRepo.getGroup(groupId)
+            if (g != null) {
+                val h = java.time.LocalDateTime.now().hour
+                h >= g.windowStartHour && h < g.windowEndHour
+            } else false
+        } else {
+            repo.isWithinWindow()
+        }
+
+        if (initialBalance <= 0L && inWindow) {
             TelemetryLogger.log(applicationContext, "BLOCK", "Redirected $pkg (0s remaining)")
             cancelTrackingNotification()
             launchTimesUpScreen()
@@ -208,14 +277,24 @@ class AppWatcherService : AccessibilityService() {
         }
 
         var tickCount = 0
-        var lastKnownBalance = repo.getBalance().balanceSeconds
+        var lastKnownBalance = initialBalance
 
         while (currentTrackedApp == pkg && currentCoroutineContext().isActive) {
             delay(1000)
             if (currentTrackedApp != pkg || !currentCoroutineContext().isActive) break
 
-            if (!repo.isWithinWindow()) {
-                // Outside window — reset baseline, don't deduct or count
+            // Window check — applies per-group window for group apps, global window for legacy.
+            val nowInWindow = if (groupId != null) {
+                val g = groupRepo.getGroup(groupId)
+                if (g != null) {
+                    val h = java.time.LocalDateTime.now().hour
+                    h >= g.windowStartHour && h < g.windowEndHour
+                } else false
+            } else {
+                repo.isWithinWindow()
+            }
+
+            if (!nowInWindow) {
                 lastDeductionTime = SystemClock.elapsedRealtime()
                 tickCount = 0
                 continue
@@ -223,23 +302,35 @@ class AppWatcherService : AccessibilityService() {
 
             tickCount++
 
-            // Every 5 seconds: real DB deduction + sync balance
+            // Every 5 seconds: real DB deduction + sync balance.
             if (tickCount >= 5) {
                 tickCount = 0
-                if (repo.isAccrualNeeded()) {
-                    repo.tick()
-                }
+                if (repo.isAccrualNeeded()) repo.tick()
+                if (groupId != null) groupRepo.tick()
+
                 val now = SystemClock.elapsedRealtime()
                 val elapsed = (now - lastDeductionTime) / 1000
                 if (elapsed > 0) {
-                    repo.deductIfInWindow(elapsed)
+                    if (groupId != null) {
+                        groupRepo.deductFromGroup(groupId, elapsed)
+                    } else {
+                        repo.deductIfInWindow(elapsed)
+                    }
                     lastDeductionTime = now
-                    persistHeartbeat()  // Stamp wall-clock time so GapReconciler can detect gaps
+                    persistHeartbeat()
                 }
-                lastKnownBalance = repo.getBalance().balanceSeconds
-                TelemetryLogger.log(applicationContext, "SCREEN_TICK", "Tracked: $pkg, Balance: ${lastKnownBalance}s")
 
-                if (!repo.hasTimeRemaining() && repo.isWithinWindow()) {
+                lastKnownBalance = if (groupId != null) {
+                    groupRepo.getGroup(groupId)?.balanceSeconds ?: 0L
+                } else {
+                    repo.getBalance().balanceSeconds
+                }
+                TelemetryLogger.log(
+                    applicationContext, "SCREEN_TICK",
+                    "Tracked: $pkg${groupName?.let { " ($it)" } ?: ""}, Balance: ${lastKnownBalance}s"
+                )
+
+                if (lastKnownBalance <= 0L && nowInWindow) {
                     TelemetryLogger.log(applicationContext, "BLOCK", "Active limit hit inside $pkg (0s remaining)")
                     cancelTrackingNotification()
                     launchTimesUpScreen()
@@ -248,25 +339,34 @@ class AppWatcherService : AccessibilityService() {
                 }
             }
 
-            // Every second: project balance by subtracting elapsed time since last deduction
-            // This gives a smooth live countdown without hitting the DB every second
+            // Every second: project balance for a smooth countdown without hitting the DB.
             val elapsedSinceDeduct = (SystemClock.elapsedRealtime() - lastDeductionTime) / 1000
             val projected = maxOf(0L, lastKnownBalance - elapsedSinceDeduct)
-            withContext(Dispatchers.Main) { updateTrackingNotification(pkg, projected) }
+            withContext(Dispatchers.Main) { updateTrackingNotification(pkg, projected, groupName) }
 
-            // Fix: Instant block when projected time hits 0s (no 5s tick delay or missing check)
+            // Instant block when projected balance hits 0.
             if (projected <= 0L) {
                 val now = SystemClock.elapsedRealtime()
                 val elapsed = (now - lastDeductionTime) / 1000
                 if (elapsed > 0) {
-                    repo.deductIfInWindow(elapsed)
+                    if (groupId != null) {
+                        groupRepo.deductFromGroup(groupId, elapsed)
+                    } else {
+                        repo.deductIfInWindow(elapsed)
+                    }
                     lastDeductionTime = now
                 }
-                if (repo.isAccrualNeeded()) {
-                    repo.tick()
-                    lastKnownBalance = repo.getBalance().balanceSeconds
+                if (repo.isAccrualNeeded()) repo.tick()
+                if (groupId != null) groupRepo.tick()
+
+                val postAccrualBalance = if (groupId != null) {
+                    groupRepo.getGroup(groupId)?.balanceSeconds ?: 0L
+                } else {
+                    repo.getBalance().balanceSeconds
                 }
-                if (!repo.hasTimeRemaining() && repo.isWithinWindow()) {
+                lastKnownBalance = postAccrualBalance
+
+                if (postAccrualBalance <= 0L && nowInWindow) {
                     TelemetryLogger.log(applicationContext, "BLOCK", "Active limit hit inside $pkg (0s projected remaining)")
                     cancelTrackingNotification()
                     launchTimesUpScreen()
@@ -353,30 +453,77 @@ class AppWatcherService : AccessibilityService() {
             graceJob = null
 
             if (pkg == currentTrackedApp) { logRaw("tracked-same"); return }
+
+            val incomingGroupId = getGroupIdForApp(pkg)
+            val prevGroupId = currentTrackedApp?.let { getGroupIdForApp(it) }
+
+            // Same-group switch (e.g. TikTok → Instagram, both in Social):
+            // Deduct elapsed for the leaving app but keep the timer running against the same pool.
+            if (incomingGroupId != null && incomingGroupId == prevGroupId) {
+                logRaw("tracked-switch-same-group")
+                val prevApp = currentTrackedApp
+                val deductFrom = lastDeductionTime
+                currentTrackedApp = pkg
+                lastDeductionTime = SystemClock.elapsedRealtime()
+                scope.launch {
+                    if (prevApp != null) {
+                        val elapsed = (SystemClock.elapsedRealtime() - deductFrom) / 1000
+                        if (elapsed > 0) groupRepo.deductFromGroup(incomingGroupId, elapsed)
+                        TelemetryLogger.log(
+                            applicationContext, "DEDUCT",
+                            "SameGroup switch $prevApp -> $pkg (group=$incomingGroupId), deducted ${elapsed}s"
+                        )
+                        lastDeductionTime = SystemClock.elapsedRealtime()
+                    }
+                    // Update notification title to new app name (balance continues draining).
+                    val balance = groupRepo.getGroup(incomingGroupId)?.balanceSeconds ?: 0L
+                    val groupName = groupIdToName[incomingGroupId]
+                    withContext(Dispatchers.Main) { postTrackingNotification(pkg, balance, groupName) }
+                }
+                // The existing tracking job continues — it monitors currentTrackedApp == pkg now.
+                return
+            }
+
+            // Different-group or legacy switch: commit previous deduction and start fresh.
             logRaw("tracked-switch")
             val prevApp = currentTrackedApp
             val deductFrom = lastDeductionTime
 
             currentTrackedApp = pkg
+            currentGroupId = incomingGroupId
             lastDeductionTime = SystemClock.elapsedRealtime()
 
-            // Cancel previous app's notification immediately on switch
             if (prevApp != null && prevApp != pkg) cancelTrackingNotification()
 
             activeTrackingJob?.cancel()
             activeTrackingJob = scope.launch {
                 if (prevApp != null && prevApp != pkg) {
-                    val secs = deductElapsedTime(deductFrom)
-                    val balance = repo.getBalance().balanceSeconds
-                    TelemetryLogger.log(applicationContext, "DEDUCT", "Switched $prevApp -> $pkg, deducted ${secs}s, Balance: ${balance}s")
+                    // Commit the previous group/legacy pool's elapsed time.
+                    val elapsed = (SystemClock.elapsedRealtime() - deductFrom) / 1000
+                    if (prevGroupId != null) {
+                        if (elapsed > 0) groupRepo.deductFromGroup(prevGroupId, elapsed)
+                        val balance = groupRepo.getGroup(prevGroupId)?.balanceSeconds ?: 0L
+                        TelemetryLogger.log(
+                            applicationContext, "DEDUCT",
+                            "Switched $prevApp(g=$prevGroupId) -> $pkg(g=${incomingGroupId}), deducted ${elapsed}s, Balance: ${balance}s"
+                        )
+                    } else {
+                        val secs = deductElapsedTime(deductFrom)
+                        val balance = repo.getBalance().balanceSeconds
+                        TelemetryLogger.log(applicationContext, "DEDUCT", "Switched $prevApp -> $pkg, deducted ${secs}s, Balance: ${balance}s")
+                    }
                     lastDeductionTime = SystemClock.elapsedRealtime()
                 }
 
-                // Post notification for new tracked app
-                val initialBalance = repo.getBalance().balanceSeconds
-                withContext(Dispatchers.Main) { postTrackingNotification(pkg, initialBalance) }
+                val initialBalance = if (incomingGroupId != null) {
+                    groupRepo.getGroup(incomingGroupId)?.balanceSeconds ?: 0L
+                } else {
+                    repo.getBalance().balanceSeconds
+                }
+                val groupName = incomingGroupId?.let { groupIdToName[it] }
+                withContext(Dispatchers.Main) { postTrackingNotification(pkg, initialBalance, groupName) }
 
-                runTrackingLoop(pkg)
+                runTrackingLoop(pkg, incomingGroupId)
             }
         } else {
             if (!isTopLevelApp(pkg)) { logRaw("ignored"); return }
@@ -413,6 +560,8 @@ class AppWatcherService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         getPrefs().registerOnSharedPreferenceChangeListener(prefListener)
+        // Rebuild group cache immediately so the first accessibility event has up-to-date mappings.
+        refreshGroupCache()
 
         val foregroundPkg = try { rootInActiveWindow?.packageName?.toString() } catch (e: Exception) { null }
 
@@ -421,12 +570,19 @@ class AppWatcherService : AccessibilityService() {
             persistHeartbeat()  // Mark service alive so GapReconciler has a baseline
             if (foregroundPkg != null && foregroundPkg in getTrackedApps()) {
                 TelemetryLogger.log(applicationContext, "SERVICE_START", "Resumed tracking $foregroundPkg on reconnect")
+                val resumeGroupId = getGroupIdForApp(foregroundPkg)
                 currentTrackedApp = foregroundPkg
+                currentGroupId = resumeGroupId
                 lastDeductionTime = SystemClock.elapsedRealtime()
-                val initialBalance = repo.getBalance().balanceSeconds
-                withContext(Dispatchers.Main) { postTrackingNotification(foregroundPkg, initialBalance) }
+                val initialBalance = if (resumeGroupId != null) {
+                    groupRepo.getGroup(resumeGroupId)?.balanceSeconds ?: 0L
+                } else {
+                    repo.getBalance().balanceSeconds
+                }
+                val groupName = resumeGroupId?.let { groupIdToName[it] }
+                withContext(Dispatchers.Main) { postTrackingNotification(foregroundPkg, initialBalance, groupName) }
                 activeTrackingJob?.cancel()
-                activeTrackingJob = scope.launch { runTrackingLoop(foregroundPkg) }
+                activeTrackingJob = scope.launch { runTrackingLoop(foregroundPkg, resumeGroupId) }
             }
         }
     }
