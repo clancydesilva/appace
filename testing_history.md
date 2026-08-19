@@ -4,7 +4,28 @@ Use this file to log every test run, errors encountered, changes made, and verif
 
 ---
 
-## [2026-05-26 20:20] Native Module Diagnostics Verification
+## [2026-08-19 21:40] Phase 8.1 — Multi-Group Native Engine (Robolectric)
+
+* **Branch**: `phase8/group-engine` (merged to `main`)
+* **Test goal**: Verify GroupBalanceRepository tick/deduct/emergency, DB migration 4→5, app membership cascade, multi-group independence, AppWatcherService + AccrualWorker compile clean with new multi-group wiring.
+* **Command**: `./gradlew.bat :screen-time:test` (from `android/`)
+
+### ✅ Final Result — BUILD SUCCESSFUL
+
+* **Tests**: 32 total, 0 failures, 0 skipped (2m 19s)
+  * `BalanceRepositoryTest`: 10 tests (all pre-existing, no regressions)
+  * `GroupBalanceRepositoryTest`: 22 tests (new)
+* **One compile error fixed during the run**:
+  * `GroupBalanceRepository.tickGroup()` was declared as a regular `fun` but called `TelemetryLogger.log()` which is `suspend`. Fixed by adding `suspend` to `tickGroup`'s signature.
+* **Changes committed (4 commits)**:
+  1. `[phase8] add MIGRATION_4_5, AppGroupEntity, AppGroupMemberEntity, AppGroupDao` — DB v4→v5 schema foundation
+  2. `[phase8] add GroupBalanceRepository` — multi-group tick (standard + compounding), deduct, emergency topup, 22 Robolectric tests
+  3. `[phase8] wire GroupBalanceRepository.tick and GapReconciler.reconcileGroups into AccrualWorker` — also resolved the legacy TODO comment in GapReconciler
+  4. `[phase8] AppWatcherService multi-group tracking` — group cache, same-group switch, per-group deduction/block, group name in notification
+
+---
+
+
 
 * **Test Goal**: Verify that the bridged Kotlin native module (Room DB, SharedPreferences, and Package Manager) works correctly on the emulator.
 * **Environment**: Android Emulator (`Pixel_6_API_34`), Expo SDK 54.
