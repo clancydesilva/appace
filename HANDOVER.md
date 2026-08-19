@@ -2,7 +2,7 @@
 
 > **Package**: `com.clancy.appace`  
 > **Stack**: React Native + Expo SDK 54 + Kotlin Native Module (`screen-time`) + Room DB (v4) + Accessibility Service + UsageStatsManager + WorkManager  
-> **Current Version**: `0.7.1` (versionCode `71`)  
+> **Current Version**: `0.7.2` (versionCode `72`)  
 > **Branch**: `main`  
 
 ---
@@ -154,10 +154,10 @@ npx tsc --noEmit
 
 # 3. Assemble Release APK
 cd android; .\gradlew assembleRelease
-Copy-Item "app\build\outputs\apk\release\app-release.apk" "..\apks\appace-0.7.1.apk" -Force
+Copy-Item "app\build\outputs\apk\release\app-release.apk" "..\apks\appace-0.7.2.apk" -Force
 
 # 4. Install & launch on connected Android device
-adb install -r apks\appace-0.7.1.apk
+adb install -r apks\appace-0.7.2.apk
 adb shell am start -n com.clancy.appace/.MainActivity
 
 # 5. Inspect Telemetry Logs on device via SQLite
