@@ -10,6 +10,7 @@ import android.os.SystemClock
 import android.view.accessibility.AccessibilityEvent
 import android.view.inputmethod.InputMethodManager
 import androidx.core.app.NotificationCompat
+import java.time.LocalDateTime
 import kotlinx.coroutines.*
 
 class AppWatcherService : AccessibilityService() {
@@ -252,6 +253,20 @@ class AppWatcherService : AccessibilityService() {
         if (repo.isAccrualNeeded()) repo.tick()
         if (groupId != null) groupRepo.tick()
 
+        // Read window hours once at loop entry — they don't change mid-session.
+        // KI-005: avoids a DB round-trip on every 1-second tick for group-tracked apps.
+        val windowStart: Int
+        val windowEnd: Int
+        if (groupId != null) {
+            val g = groupRepo.getGroup(groupId)
+            windowStart = g?.windowStartHour ?: 0
+            windowEnd   = g?.windowEndHour   ?: 24
+        } else {
+            val b = repo.getBalance()
+            windowStart = b.windowStartHour
+            windowEnd   = b.windowEndHour
+        }
+
         // Check for zero balance before starting the loop.
         val initialBalance = if (groupId != null) {
             groupRepo.getGroup(groupId)?.balanceSeconds ?: 0L
@@ -259,11 +274,8 @@ class AppWatcherService : AccessibilityService() {
             repo.getBalance().balanceSeconds
         }
         val inWindow = if (groupId != null) {
-            val g = groupRepo.getGroup(groupId)
-            if (g != null) {
-                val h = java.time.LocalDateTime.now().hour
-                h >= g.windowStartHour && h < g.windowEndHour
-            } else false
+            val h = LocalDateTime.now().hour
+            h >= windowStart && h < windowEnd
         } else {
             repo.isWithinWindow()
         }
@@ -283,13 +295,10 @@ class AppWatcherService : AccessibilityService() {
             delay(1000)
             if (currentTrackedApp != pkg || !currentCoroutineContext().isActive) break
 
-            // Window check — applies per-group window for group apps, global window for legacy.
+            // Window check — uses cached windowStart/windowEnd (KI-005: no DB read per tick).
             val nowInWindow = if (groupId != null) {
-                val g = groupRepo.getGroup(groupId)
-                if (g != null) {
-                    val h = java.time.LocalDateTime.now().hour
-                    h >= g.windowStartHour && h < g.windowEndHour
-                } else false
+                val h = LocalDateTime.now().hour
+                h >= windowStart && h < windowEnd
             } else {
                 repo.isWithinWindow()
             }
