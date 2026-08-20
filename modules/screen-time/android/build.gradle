@@ -44,6 +44,12 @@ android {
   testOptions {
     unitTests {
       includeAndroidResources = true
+      // KI-004: testDateTime is a companion object static in BalanceRepository and
+      // GroupBalanceRepository — not thread-safe across concurrent test classes.
+      // Keep forks at 1 until companion statics are replaced with constructor injection.
+      all {
+        maxParallelForks = 1
+      }
     }
   }
 }
