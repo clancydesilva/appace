@@ -21,6 +21,14 @@ class AccrualWorker(context: Context, params: WorkerParameters)
 
                 // Reconcile any gap that occurred since the last heartbeat
                 // (e.g. service was killed by OS/OEM between ticks).
+                //
+                // KI-003 COUPLING WARNING: reconcile() MUST run before reconcileGroups()
+                // and must not be removed without first giving reconcileGroups() its own
+                // cursor advancement. reconcileGroups() reads ReconciliationEntity.lastReconciledMs
+                // to determine its UsageStats window, but only reconcile() advances that cursor.
+                // Removing reconcile() while reconcileGroups() still reads the shared cursor will
+                // cause reconcileGroups() to re-process the same stale events on every tick,
+                // producing runaway balance deductions. See known-issues.md KI-003.
                 try {
                     GapReconciler.reconcile(applicationContext)
                 } catch (e: Exception) {
@@ -36,8 +44,9 @@ class AccrualWorker(context: Context, params: WorkerParameters)
                     TelemetryLogger.log(applicationContext, "WORKER_ERR", "GroupTick failed: ${e.message}")
                 }
 
-                // Multi-group gap reconciler — attributes UsageStats foreground time
-                // per group while the accessibility service was not running.
+                // Multi-group gap reconciler — runs after reconcile() deliberately (see KI-003 above).
+                // Attributes UsageStats foreground time per group while the accessibility service
+                // was not running.
                 try {
                     GapReconciler.reconcileGroups(applicationContext)
                 } catch (e: Exception) {
