@@ -120,13 +120,6 @@ export default function HomeScreen() {
             <Text style={styles.brandTitle}>APPACE</Text>
             <Text style={styles.dateSubtitle}>{todayDateString.toUpperCase()}</Text>
           </View>
-          <TouchableOpacity
-            style={styles.addGroupButton}
-            onPress={handleNavigateToSettings}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.addGroupButtonText}>＋ Add Group</Text>
-          </TouchableOpacity>
         </View>
 
         {/* Permission Warning Banners */}
@@ -159,9 +152,6 @@ export default function HomeScreen() {
         {/* Group Cards List or Empty State */}
         {store.appGroups.length === 0 ? (
           <View style={styles.emptyContainer}>
-            <View style={styles.emptyIconBox}>
-              <Text style={styles.emptyIcon}>⏳</Text>
-            </View>
             <Text style={styles.emptyTitle}>No App Groups Configured</Text>
             <Text style={styles.emptySubtitle}>
               Create an app group to assign apps, earn screen time budget, and set custom rules.
@@ -171,7 +161,7 @@ export default function HomeScreen() {
               onPress={handleNavigateToSettings}
               activeOpacity={0.8}
             >
-              <Text style={styles.emptyActionButtonText}>＋ Create Your First Group</Text>
+              <Text style={styles.emptyActionButtonText}>+ Create Your First Group</Text>
             </TouchableOpacity>
           </View>
         ) : (

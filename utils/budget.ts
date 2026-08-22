@@ -11,7 +11,7 @@ export function calculateMaxDailyMinutes(
     interval: number
 ): number {
     let drops = 0;
-    for (let hr = start + 1; hr < end; hr++) {
+    for (let hr = start; hr < end; hr++) {
         if ((hr - start) % interval === 0) drops++;
     }
     return opening + (drops * accrual);
@@ -31,7 +31,7 @@ export function calculateGroupMaxDaily(group: AppGroup): number {
         const baseMins = group.compoundingBase / 60.0;
         const d = group.compoundingCoefficient;
         let total = opening;
-        for (let hr = start + 1; hr < end; hr++) {
+        for (let hr = start; hr < end; hr++) {
             const hourIndex = hr - start;
             if (hourIndex % interval === 0) {
                 const dropMins = baseMins + (hourIndex * d);

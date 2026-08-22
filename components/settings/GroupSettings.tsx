@@ -46,7 +46,7 @@ export function GroupSettings() {
           onPress={handleOpenCreate}
           activeOpacity={0.7}
         >
-          <Text style={styles.addBtnText}>＋ Add</Text>
+          <Text style={styles.addBtnText}>+ Add</Text>
         </TouchableOpacity>
       </View>
 
@@ -54,7 +54,7 @@ export function GroupSettings() {
         <View style={styles.emptyCard}>
           <Text style={styles.emptyTitle}>No Groups Configured</Text>
           <Text style={styles.emptyText}>
-            Tap "＋ Add" above to configure your first app group.
+            Tap "+ Add" above to configure your first app group.
           </Text>
         </View>
       ) : (
@@ -84,20 +84,20 @@ export function GroupSettings() {
 
                 <View style={styles.groupCardMeta}>
                   <Text style={styles.metaText}>
-                    🕒 {formatHourLabel(group.windowStartHour)} – {formatHourLabel(group.windowEndHour)}
+                    Window: {formatHourLabel(group.windowStartHour)} - {formatHourLabel(group.windowEndHour)}
                   </Text>
                   <Text style={styles.metaText}>
-                    ⏱ {group.openingBalanceMinutes}m open + {group.hourlyAccrualMinutes}m/hr
+                    Accrual: {group.openingBalanceMinutes}m open + {group.hourlyAccrualMinutes}m/hr
                   </Text>
                   {emergencyMins > 0 && (
                     <Text style={styles.metaText}>
-                      🚨 Emergency reserve: {emergencyMins}m
+                      Emergency reserve: {emergencyMins}m
                     </Text>
                   )}
                 </View>
 
                 <View style={styles.editIndicator}>
-                  <Text style={styles.editText}>Tap to edit settings →</Text>
+                  <Text style={styles.editText}>Tap to edit settings</Text>
                 </View>
               </TouchableOpacity>
             );

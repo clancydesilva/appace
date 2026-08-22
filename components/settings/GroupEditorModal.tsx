@@ -440,7 +440,7 @@ export function GroupEditorModal({
                     onPress={() => setIsAddingApps(!isAddingApps)}
                   >
                     <Text style={styles.addAppsLink}>
-                      {isAddingApps ? 'Done Adding' : '＋ Manage Apps'}
+                      {isAddingApps ? 'Done Adding' : '+ Manage Apps'}
                     </Text>
                   </TouchableOpacity>
                 </View>

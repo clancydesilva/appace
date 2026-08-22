@@ -232,14 +232,14 @@ export function StepGroupBuilder({ installedApps, loadingApps, onFinish }: Props
           style={[styles.secondaryButton, { marginBottom: 10 }]}
           onPress={handleCreateAnother}
         >
-          <Text style={styles.secondaryButtonText}>＋ Create Another Group →</Text>
+          <Text style={styles.secondaryButtonText}>+ Create Another Group</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={{ paddingVertical: 8, alignItems: 'center' }}
           onPress={() => setSubStep('selecting')}
         >
-          <Text style={{ color: '#777777', fontSize: 13 }}>← Back to App Selection</Text>
+          <Text style={{ color: '#777777', fontSize: 13 }}>Back to App Selection</Text>
         </TouchableOpacity>
       </ScrollView>
     );
