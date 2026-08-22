@@ -5,15 +5,14 @@ import {
   StyleSheet,
   TouchableOpacity,
   SafeAreaView,
-  Platform,
+  ScrollView,
   AppState,
   AppStateStatus,
+  RefreshControl,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTimerStore } from '../../store/useTimerStore';
-
-import { calculateMaxDailyMinutes } from '../../utils/budget';
-import { formatHourLabel } from '../../utils/formatTime';
+import { GroupCard } from '../../components/home/GroupCard';
 import { AccessibilityDisclosureModal } from '../../components/AccessibilityDisclosureModal';
 
 export default function HomeScreen() {
@@ -21,33 +20,29 @@ export default function HomeScreen() {
   const store = useTimerStore();
 
   const [disclosureVisible, setDisclosureVisible] = useState(false);
-  const [minutesUntilNextDrop, setMinutesUntilNextDrop] = useState(60 - new Date().getMinutes());
-  const [hourProgress, setHourProgress] = useState(new Date().getMinutes() / 60);
+  const [refreshing, setRefreshing] = useState(false);
+  const [, setClockTick] = useState(0);
 
-  const balanceTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const clockTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Core initialization & listeners
   useEffect(() => {
     // 1. Initial fetches
     refreshState().catch(console.warn);
 
-    // 2. Setup 10-second refetch interval for database sync
-    balanceTimer.current = setInterval(() => {
-      store.fetchBalance().catch(console.warn);
-      store.checkWindow().catch(console.warn);
+    // 2. 10-second database sync interval
+    pollTimer.current = setInterval(() => {
+      store.fetchAppGroups().catch(console.warn);
       store.checkAccessibility().catch(console.warn);
       store.checkBatteryOptimization().catch(console.warn);
     }, 10000);
 
-    // 3. Setup 1-second clock timer to update progress bar and countdowns
+    // 3. 1-second clock timer to smoothly advance progress bars and drop countdowns
     clockTimer.current = setInterval(() => {
-      const now = new Date();
-      setMinutesUntilNextDrop(60 - now.getMinutes());
-      setHourProgress(now.getMinutes() / 60);
+      setClockTick((t) => (t + 1) % 1000000);
     }, 1000);
 
-    // 4. AppState listener for active foreground detection (checks permissions immediately when user returns)
+    // 4. AppState change listener for immediate resume sync
     const handleAppStateChange = (nextStatus: AppStateStatus) => {
       if (nextStatus === 'active') {
         refreshState().catch(console.warn);
@@ -56,7 +51,7 @@ export default function HomeScreen() {
     const sub = AppState.addEventListener('change', handleAppStateChange);
 
     return () => {
-      if (balanceTimer.current) clearInterval(balanceTimer.current);
+      if (pollTimer.current) clearInterval(pollTimer.current);
       if (clockTimer.current) clearInterval(clockTimer.current);
       sub.remove();
     };
@@ -69,39 +64,36 @@ export default function HomeScreen() {
       return;
     }
     await store.startService();
-    // Wait 150ms to allow Accessibility Service background thread to finish writing any pending time deductions to Room DB
+    // Allow brief settle for background tracking writes
     await new Promise((resolve) => setTimeout(resolve, 150));
-    await store.fetchBalance();
-    await store.fetchSettings();
-    await store.checkWindow();
+    await store.fetchAppGroups();
+    await store.fetchInstalledApps();
     await store.checkAccessibility();
     await store.checkBatteryOptimization();
   };
 
-
-
-  // Format balance (seconds) to MM:SS (e.g. 75m 30s -> 75:30)
-  const formatBalance = (totalSeconds: number) => {
-    const mins = Math.floor(totalSeconds / 60);
-    const secs = totalSeconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  // Check window status text
-  const getWindowStatusText = () => {
-    if (store.isWithinWindow) {
-      return 'Active Earning Window';
+  const handleManualRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refreshState();
+    } finally {
+      setRefreshing(false);
     }
-    return `Window opens at ${formatHourLabel(store.windowStartHour)}`;
   };
 
-  const computedMaxDaily = calculateMaxDailyMinutes(
-    store.windowStartHour, 
-    store.windowEndHour, 
-    store.openingBalanceMinutes, 
-    store.hourlyAccrualMinutes, 
-    store.accrualIntervalHours
-  );
+  const handleApplyTopUp = async (groupId: number, seconds: number) => {
+    await store.applyEmergencyTopUp(groupId, seconds);
+  };
+
+  const handleNavigateToSettings = () => {
+    router.push('/(tabs)/settings');
+  };
+
+  const todayDateString = new Date().toLocaleDateString(undefined, {
+    weekday: 'long',
+    month: 'short',
+    day: 'numeric',
+  });
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -110,8 +102,34 @@ export default function HomeScreen() {
         onClose={() => setDisclosureVisible(false)}
       />
 
-      <View style={styles.container}>
-        {/* Subtle Permission Warning Banners */}
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleManualRefresh}
+            tintColor="#FFFFFF"
+          />
+        }
+      >
+        {/* Header Bar */}
+        <View style={styles.topHeader}>
+          <View>
+            <Text style={styles.brandTitle}>APPACE</Text>
+            <Text style={styles.dateSubtitle}>{todayDateString.toUpperCase()}</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.addGroupButton}
+            onPress={handleNavigateToSettings}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.addGroupButtonText}>＋ Add Group</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Permission Warning Banners */}
         {!store.accessibilityEnabled && (
           <TouchableOpacity
             style={styles.warningBanner}
@@ -120,7 +138,7 @@ export default function HomeScreen() {
           >
             <Text style={styles.warningTitle}>Accessibility Service Inactive</Text>
             <Text style={styles.warningDesc}>
-              Appace cannot monitor screen usage. Tap here to enable.
+              Appace cannot monitor app limits. Tap here to enable accessibility.
             </Text>
           </TouchableOpacity>
         )}
@@ -138,36 +156,38 @@ export default function HomeScreen() {
           </TouchableOpacity>
         )}
 
-        {/* Large Timer Display */}
-        <View style={styles.timerSection}>
-          <Text style={styles.windowStatus}>{getWindowStatusText()}</Text>
-          <Text style={styles.timerDigits}>{formatBalance(store.balanceSeconds)}</Text>
-          <Text style={styles.timerLabel}>REMAINING BALANCE</Text>
-        </View>
-
-        {/* Hour Accrual Progress Section */}
-        {store.isWithinWindow && (
-          <View style={styles.accrualSection}>
-            <View style={styles.progressBarBg}>
-              <View style={[styles.progressBarFill, { width: `${hourProgress * 100}%` }]} />
+        {/* Group Cards List or Empty State */}
+        {store.appGroups.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <View style={styles.emptyIconBox}>
+              <Text style={styles.emptyIcon}>⏳</Text>
             </View>
-            <Text style={styles.accrualText}>
-              Next <Text style={styles.boldText}>{store.hourlyAccrualMinutes} mins</Text> in{' '}
-              <Text style={styles.boldText}>{minutesUntilNextDrop} minutes</Text>
+            <Text style={styles.emptyTitle}>No App Groups Configured</Text>
+            <Text style={styles.emptySubtitle}>
+              Create an app group to assign apps, earn screen time budget, and set custom rules.
             </Text>
+            <TouchableOpacity
+              style={styles.emptyActionButton}
+              onPress={handleNavigateToSettings}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.emptyActionButtonText}>＋ Create Your First Group</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={styles.groupsContainer}>
+            {store.appGroups.map((group) => (
+              <GroupCard
+                key={group.id}
+                group={group}
+                installedApps={store.installedApps}
+                onTopUp={handleApplyTopUp}
+                onPress={handleNavigateToSettings}
+              />
+            ))}
           </View>
         )}
-
-        {/* Footer Summary Stats */}
-        <View style={styles.summaryContainer}>
-          <Text style={styles.summaryText}>
-            Earning {store.hourlyAccrualMinutes} mins/hr · Resets at midnight
-          </Text>
-          <Text style={styles.summarySubtext}>
-            Daily Max Potential: {computedMaxDaily} mins
-          </Text>
-        </View>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -177,20 +197,54 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#0D0D0D',
   },
-  container: {
+  scrollView: {
     flex: 1,
-    paddingHorizontal: 24,
+  },
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 32,
+  },
+  topHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: 20,
-    paddingBottom: 40,
+    marginBottom: 20,
+  },
+  brandTitle: {
+    color: '#FFFFFF',
+    fontSize: 22,
+    fontWeight: '900',
+    letterSpacing: 2,
+  },
+  dateSubtitle: {
+    color: '#666666',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1,
+    marginTop: 2,
+  },
+  addGroupButton: {
+    backgroundColor: '#1C1C1C',
+    borderWidth: 1,
+    borderColor: '#2A2A2A',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 6,
+  },
+  addGroupButtonText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
   warningBanner: {
     backgroundColor: '#1C0D0D',
     borderWidth: 1,
     borderColor: '#E74C3C',
     borderRadius: 8,
-    padding: 16,
-    marginTop: 10,
+    padding: 14,
+    marginBottom: 16,
   },
   warningBannerSubtle: {
     backgroundColor: '#1C160D',
@@ -198,7 +252,7 @@ const styles = StyleSheet.create({
   },
   warningTitle: {
     color: '#FFFFFF',
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: 'bold',
   },
   warningDesc: {
@@ -207,75 +261,55 @@ const styles = StyleSheet.create({
     marginTop: 4,
     lineHeight: 15,
   },
-  timerSection: {
+  groupsContainer: {
+    marginTop: 4,
+  },
+  emptyContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    flex: 1,
+    paddingVertical: 60,
+    paddingHorizontal: 20,
+    backgroundColor: '#141414',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#222222',
+    marginTop: 10,
   },
-  windowStatus: {
-    color: '#555555',
-    fontSize: 12,
-    fontWeight: '900',
-    letterSpacing: 2,
-    textTransform: 'uppercase',
-    marginBottom: 20,
-  },
-  timerDigits: {
-    color: '#FFFFFF',
-    fontSize: 84,
-    fontWeight: '100',
-    letterSpacing: -2,
-    fontVariant: ['tabular-nums'],
-  },
-  timerLabel: {
-    color: '#555555',
-    fontSize: 10,
-    fontWeight: 'bold',
-    letterSpacing: 1.5,
-    marginTop: 16,
-  },
-  accrualSection: {
-    width: '100%',
+  emptyIconBox: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#1C1C1C',
     alignItems: 'center',
-    marginBottom: 40,
-  },
-  progressBarBg: {
-    width: '100%',
-    height: 2,
-    backgroundColor: '#1A1A1A',
-    borderRadius: 1,
-    overflow: 'hidden',
+    justifyContent: 'center',
     marginBottom: 16,
   },
-  progressBarFill: {
-    height: '100%',
-    backgroundColor: '#FFFFFF',
+  emptyIcon: {
+    fontSize: 28,
   },
-  accrualText: {
-    color: '#555555',
-    fontSize: 12,
-  },
-  boldText: {
+  emptyTitle: {
     color: '#FFFFFF',
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '800',
+    marginBottom: 8,
+    textAlign: 'center',
   },
-  summaryContainer: {
-    alignItems: 'center',
-    borderTopWidth: 1,
-    borderColor: '#141414',
-    paddingTop: 24,
+  emptySubtitle: {
+    color: '#777777',
+    fontSize: 13,
+    lineHeight: 18,
+    textAlign: 'center',
+    marginBottom: 24,
   },
-  summaryText: {
-    color: '#555555',
-    fontSize: 12,
-    fontWeight: '600',
+  emptyActionButton: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
   },
-  summarySubtext: {
-    color: '#333333',
-    fontSize: 10,
-    fontWeight: 'bold',
-    marginTop: 6,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+  emptyActionButtonText: {
+    color: '#000000',
+    fontSize: 13,
+    fontWeight: '800',
   },
 });

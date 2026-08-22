@@ -8,7 +8,7 @@ import { StepAccessibility } from '../components/onboarding/StepAccessibility';
 import { StepUsageAccess } from '../components/onboarding/StepUsageAccess';
 import { StepBattery } from '../components/onboarding/StepBattery';
 import { StepNotifications } from '../components/onboarding/StepNotifications';
-import { StepApps } from '../components/onboarding/StepApps';
+import { StepGroupBuilder } from '../components/onboarding/StepGroupBuilder';
 import { styles } from '../components/onboarding/styles';
 
 export default function OnboardingScreen() {
@@ -16,7 +16,6 @@ export default function OnboardingScreen() {
   const store = useTimerStore();
 
   const [step, setStep] = useState(1);
-  const [searchQuery, setSearchQuery] = useState('');
   const [loadingApps, setLoadingApps] = useState(false);
 
   // Interval references for permission polling
@@ -75,7 +74,7 @@ export default function OnboardingScreen() {
     if (step === 7) {
       setLoadingApps(true);
       store.fetchInstalledApps()
-        .then(() => store.fetchTrackedApps())
+        .then(() => store.fetchAppGroups())
         .finally(() => setLoadingApps(false));
     }
   }, [step]);
@@ -85,16 +84,6 @@ export default function OnboardingScreen() {
     await store.startService();
     router.replace('/(tabs)');
   };
-
-  const filteredApps = store.installedApps
-    .filter((app) => app.name.toLowerCase().includes(searchQuery.toLowerCase()))
-    .sort((a, b) => {
-      const aTracked = store.trackedApps.includes(a.package);
-      const bTracked = store.trackedApps.includes(b.package);
-      if (aTracked && !bTracked) return -1;
-      if (!aTracked && bTracked) return 1;
-      return a.name.localeCompare(b.name);
-    });
 
   const renderDotIndicator = () => (
     <View style={styles.indicatorContainer}>
@@ -127,11 +116,9 @@ export default function OnboardingScreen() {
           {step === 5 && <StepBattery onNext={() => setStep(6)} />}
           {step === 6 && <StepNotifications onNext={() => setStep(7)} />}
           {step === 7 && (
-            <StepApps
-              searchQuery={searchQuery}
-              setSearchQuery={setSearchQuery}
+            <StepGroupBuilder
+              installedApps={store.installedApps}
               loadingApps={loadingApps}
-              filteredApps={filteredApps}
               onFinish={handleFinishOnboarding}
             />
           )}
