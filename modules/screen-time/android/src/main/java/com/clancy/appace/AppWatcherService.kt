@@ -154,6 +154,10 @@ class AppWatcherService : AccessibilityService() {
     /** Returns the groupId for [pkg] if it belongs to a group, or null if untracked/legacy. */
     private fun getGroupIdForApp(pkg: String): Int? = packageToGroupId[pkg]
 
+    /** Returns true if [pkg] is assigned to any app group or is in the legacy tracked apps set. */
+    private fun isTrackedApp(pkg: String): Boolean =
+        packageToGroupId.containsKey(pkg) || pkg in getTrackedApps()
+
     private fun isInputMethod(pkg: String): Boolean {
         // Fast path: package was already confirmed as an IME in a prior event
         if (pkg in knownImePackages) return true
@@ -462,11 +466,20 @@ class AppWatcherService : AccessibilityService() {
                         return@launch
                     }
                     if (currentTrackedApp == prevApp) {
+                        val prevGroupId = currentGroupId
                         currentTrackedApp = null
+                        currentGroupId = null
                         activeTrackingJob?.cancel()
-                        val secs = deductElapsedTime(deductFrom)
-                        val balance = repo.getBalance().balanceSeconds
-                        TelemetryLogger.log(applicationContext, "DEDUCT", "Left to $pkg from $prevApp after 5s grace, deducted ${secs}s, Balance: ${balance}s")
+                        val elapsed = (SystemClock.elapsedRealtime() - deductFrom) / 1000
+                        if (prevGroupId != null) {
+                            if (elapsed > 0) groupRepo.deductFromGroup(prevGroupId, elapsed)
+                            val balance = groupRepo.getGroup(prevGroupId)?.balanceSeconds ?: 0L
+                            TelemetryLogger.log(applicationContext, "DEDUCT", "Left to $pkg from $prevApp(g=$prevGroupId) after 5s grace, deducted ${elapsed}s, Balance: ${balance}s")
+                        } else {
+                            val secs = deductElapsedTime(deductFrom)
+                            val balance = repo.getBalance().balanceSeconds
+                            TelemetryLogger.log(applicationContext, "DEDUCT", "Left to $pkg from $prevApp after 5s grace, deducted ${secs}s, Balance: ${balance}s")
+                        }
                     }
                     graceJob = null
                 }
@@ -474,10 +487,8 @@ class AppWatcherService : AccessibilityService() {
             return
         }
 
-        val trackedApps = getTrackedApps()
-
-        // 3. Package is a tracked application
-        if (pkg in trackedApps) {
+        // 3. Package is a tracked application (assigned to a group or legacy tracked set)
+        if (isTrackedApp(pkg)) {
             if (graceJob != null && currentTrackedApp == pkg) {
                 graceJob?.cancel()
                 graceJob = null
@@ -581,11 +592,20 @@ class AppWatcherService : AccessibilityService() {
                         return@launch
                     }
                     if (currentTrackedApp == prevApp) {
+                        val prevGroupId = currentGroupId
                         currentTrackedApp = null
+                        currentGroupId = null
                         activeTrackingJob?.cancel()
-                        val secs = deductElapsedTime(deductFrom)
-                        val balance = repo.getBalance().balanceSeconds
-                        TelemetryLogger.log(applicationContext, "DEDUCT", "Left $prevApp for $pkg after 5s grace, deducted ${secs}s, Balance: ${balance}s")
+                        val elapsed = (SystemClock.elapsedRealtime() - deductFrom) / 1000
+                        if (prevGroupId != null) {
+                            if (elapsed > 0) groupRepo.deductFromGroup(prevGroupId, elapsed)
+                            val balance = groupRepo.getGroup(prevGroupId)?.balanceSeconds ?: 0L
+                            TelemetryLogger.log(applicationContext, "DEDUCT", "Left $prevApp(g=$prevGroupId) for $pkg after 5s grace, deducted ${elapsed}s, Balance: ${balance}s")
+                        } else {
+                            val secs = deductElapsedTime(deductFrom)
+                            val balance = repo.getBalance().balanceSeconds
+                            TelemetryLogger.log(applicationContext, "DEDUCT", "Left $prevApp for $pkg after 5s grace, deducted ${secs}s, Balance: ${balance}s")
+                        }
                     }
                     graceJob = null
                 }
@@ -622,7 +642,7 @@ class AppWatcherService : AccessibilityService() {
         scope.launch {
             TelemetryLogger.log(applicationContext, "SERVICE_START", "AppWatcherService accessibility active")
             persistHeartbeat()  // Mark service alive so GapReconciler has a baseline
-            if (foregroundPkg != null && foregroundPkg in getTrackedApps()) {
+            if (foregroundPkg != null && isTrackedApp(foregroundPkg)) {
                 TelemetryLogger.log(applicationContext, "SERVICE_START", "Resumed tracking $foregroundPkg on reconnect")
                 val resumeGroupId = getGroupIdForApp(foregroundPkg)
                 currentTrackedApp = foregroundPkg
