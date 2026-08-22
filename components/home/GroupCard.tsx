@@ -105,38 +105,33 @@ export function GroupCard({ group, installedApps, onTopUp, onPress }: Props) {
           <View style={styles.emergencyHeader}>
             <Text style={styles.emergencyTitle}>EMERGENCY POOL</Text>
             <Text style={styles.emergencyRemaining}>
-              {emergencyRemainingMins > 0
-                ? `${emergencyRemainingMins}m remaining`
+              {group.emergencyRemainingSeconds > 0
+                ? group.emergencyRemainingSeconds >= 60
+                  ? `${Math.floor(group.emergencyRemainingSeconds / 60)}m remaining`
+                  : `${group.emergencyRemainingSeconds}s remaining`
                 : 'Exhausted'}
             </Text>
           </View>
 
-          {emergencyRemainingMins > 0 && (
+          {group.emergencyRemainingSeconds > 0 && (
             <View style={styles.chipsRow}>
               {topUpOptions.map((opt) => {
-                const isAvailable = group.emergencyRemainingSeconds >= opt.seconds;
                 const isLoadingThis = topUpLoading === opt.seconds;
                 return (
                   <TouchableOpacity
                     key={opt.seconds}
                     style={[
                       styles.chip,
-                      !isAvailable && styles.chipDisabled,
                       isLoadingThis && styles.chipLoading,
                     ]}
-                    disabled={!isAvailable || topUpLoading !== null}
+                    disabled={topUpLoading !== null}
                     onPress={() => handleApplyTopUp(opt.seconds)}
                     activeOpacity={0.7}
                   >
                     {isLoadingThis ? (
                       <ActivityIndicator size="small" color="#000000" />
                     ) : (
-                      <Text
-                        style={[
-                          styles.chipText,
-                          !isAvailable && styles.chipTextDisabled,
-                        ]}
-                      >
+                      <Text style={styles.chipText}>
                         {opt.label}
                       </Text>
                     )}
