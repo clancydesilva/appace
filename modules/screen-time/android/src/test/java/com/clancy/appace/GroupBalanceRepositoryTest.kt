@@ -195,24 +195,64 @@ class GroupBalanceRepositoryTest {
         GroupBalanceRepository.testDateTime = at(6)
         repo.tick()
 
-        // Manually use some emergency budget to verify it resets
+        // Manually set balance
         db.appGroupDao().updateGroup(
             db.appGroupDao().getGroupById(id)!!.copy(
-                balanceSeconds = 1000L,
-                emergencyUsedSeconds = 300L
+                balanceSeconds = 1000L
             )
         )
 
-        // Advance to next day
+        // Advance to next day outside window (00:05)
         GroupBalanceRepository.testDateTime = LocalDateTime.of(TEST_DAY.plusDays(1), LocalTime.of(0, 5))
         repo.tick()
 
         val g = db.appGroupDao().getGroupById(id)!!
         assertEquals(0L, g.balanceSeconds)
-        assertEquals(0L, g.emergencyUsedSeconds)
         assertFalse(g.windowOpenGrantedToday)
         assertEquals(-1, g.lastAccrualHour)
         assertEquals(TEST_DAY.plusDays(1).toString(), g.lastResetDate)
+    }
+
+    @Test
+    fun `emergencyUsedSeconds stays elevated past midnight and resets at window open`() = runBlocking {
+        val id = insertGroup(windowStart = 6, windowEnd = 22, emergencyBudgetSeconds = 600L)
+        GroupBalanceRepository.testDateTime = at(14)
+        repo.tick()
+
+        // 1. Top up emergency during the day
+        val granted = repo.applyEmergencyTopUp(id, 300L)
+        assertEquals(300L, granted)
+        val day1Group = db.appGroupDao().getGroupById(id)!!
+        assertEquals(300L, day1Group.emergencyUsedSeconds)
+
+        // 2. Simulate midnight rollover outside window (Day 2 at 01:00 AM)
+        GroupBalanceRepository.testDateTime = LocalDateTime.of(TEST_DAY.plusDays(1), LocalTime.of(1, 0))
+        repo.tick()
+
+        val midnightGroup = db.appGroupDao().getGroupById(id)!!
+        assertEquals(0L, midnightGroup.balanceSeconds)
+        assertFalse(midnightGroup.windowOpenGrantedToday)
+        // emergencyUsedSeconds must remain elevated (NOT reset at midnight outside window)
+        assertEquals(300L, midnightGroup.emergencyUsedSeconds)
+
+        // 3. Simulate window open on Day 2 (Day 2 at 06:00 AM)
+        GroupBalanceRepository.testDateTime = LocalDateTime.of(TEST_DAY.plusDays(1), LocalTime.of(6, 0))
+        repo.tick()
+
+        val windowOpenGroup = db.appGroupDao().getGroupById(id)!!
+        assertTrue(windowOpenGroup.windowOpenGrantedToday)
+        // emergencyUsedSeconds must reset to 0 at window open
+        assertEquals(0L, windowOpenGroup.emergencyUsedSeconds)
+
+        // 4. Tick again same day (Day 2 at 07:00 AM) after drawing emergency again
+        repo.applyEmergencyTopUp(id, 120L)
+        assertEquals(120L, db.appGroupDao().getGroupById(id)!!.emergencyUsedSeconds)
+
+        GroupBalanceRepository.testDateTime = LocalDateTime.of(TEST_DAY.plusDays(1), LocalTime.of(7, 0))
+        repo.tick()
+
+        // Must stay at 120L (does NOT reset mid-day on subsequent ticks)
+        assertEquals(120L, db.appGroupDao().getGroupById(id)!!.emergencyUsedSeconds)
     }
 
     // --- Outside window ---

@@ -80,14 +80,13 @@ class GroupBalanceRepository(private val context: Context) {
     private suspend fun tickGroup(group: AppGroupEntity, todayStr: String, currentHour: Int) {
         var g = group
 
-        // Step 1: midnight reset — new calendar day wipes all per-day state.
+        // Step 1: midnight reset — new calendar day wipes balance and reset flags.
         if (todayStr != g.lastResetDate) {
             g = g.copy(
                 balanceSeconds = 0,
                 lastResetDate = todayStr,
                 windowOpenGrantedToday = false,
-                lastAccrualHour = -1,
-                emergencyUsedSeconds = 0
+                lastAccrualHour = -1
             )
             dao.updateGroup(g)
         }
@@ -103,13 +102,14 @@ class GroupBalanceRepository(private val context: Context) {
                 windowOpenGrantedToday = true,
                 // Prime lastAccrualHour so the catch-up loop starts at windowStartHour,
                 // matching the single-group BalanceRepository.tick() convention.
-                lastAccrualHour = g.windowStartHour - 1
+                lastAccrualHour = g.windowStartHour - 1,
+                emergencyUsedSeconds = 0
             )
             dao.updateGroup(g)
             TelemetryLogger.log(
                 context,
                 "TICK",
-                "Group '${g.name}' opening grant: ${g.openingBalanceSeconds / 60}m. Balance: ${g.balanceSeconds}s"
+                "Group '${g.name}' opening grant: ${g.openingBalanceSeconds / 60}m, emergency pool reset. Balance: ${g.balanceSeconds}s"
             )
         }
 
