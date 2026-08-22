@@ -1,5 +1,5 @@
 import { NativeModule, requireNativeModule } from 'expo';
-import { AppaceSettings, InstalledApp, TelemetryLog } from './ExpoScreenTime.types';
+import { AppaceSettings, AppGroup, CreateGroupInput, InstalledApp, TelemetryLog } from './ExpoScreenTime.types';
 
 declare class ExpoScreenTimeModule extends NativeModule {
   getBalance(): Promise<number>;
@@ -25,6 +25,13 @@ declare class ExpoScreenTimeModule extends NativeModule {
   startForegroundService(): Promise<void>;
   getTelemetryLogs(): Promise<TelemetryLog[]>;
   clearTelemetryLogs(): Promise<void>;
+  getAppGroups(): Promise<AppGroup[]>;
+  createAppGroup(input: CreateGroupInput): Promise<number>;
+  updateGroupSettings(groupId: number, input: CreateGroupInput): Promise<void>;
+  deleteAppGroup(groupId: number): Promise<void>;
+  addAppToGroup(packageName: string, groupId: number): Promise<void>;
+  removeAppFromGroup(packageName: string): Promise<void>;
+  applyEmergencyTopUp(groupId: number, requestedSeconds: number): Promise<number>;
   isDebug: boolean;
 }
 

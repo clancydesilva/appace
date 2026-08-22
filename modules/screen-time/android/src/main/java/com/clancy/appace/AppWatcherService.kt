@@ -4,8 +4,12 @@ import android.accessibilityservice.AccessibilityService
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.SharedPreferences
+import android.os.Build
 import android.os.SystemClock
 import android.view.accessibility.AccessibilityEvent
 import android.view.inputmethod.InputMethodManager
@@ -17,6 +21,29 @@ class AppWatcherService : AccessibilityService() {
     companion object {
         const val CHANNEL_TRACKING = "appace_tracking"
         const val TRACKING_NOTIFICATION_ID = 2
+        private const val ACTION_INVALIDATE_CACHE = "com.clancy.appace.INVALIDATE_GROUP_CACHE"
+
+        /**
+         * Sends a local broadcast that tells the running [AppWatcherService] to
+         * rebuild its in-memory package→groupId cache. Call this from
+         * [ExpoScreenTimeModule] after any group membership mutation (create,
+         * delete, addMember, removeMember) to resolve KI-002.
+         *
+         * Delivery is best-effort and asynchronous — the cache will be current
+         * within a few milliseconds, but callers must not assume it is
+         * guaranteed-current the instant this method returns.
+         */
+        fun invalidateGroupCache(context: Context) {
+            val intent = Intent(ACTION_INVALIDATE_CACHE).setPackage(context.packageName)
+            context.sendBroadcast(intent)
+        }
+    }
+
+    // Receives ACTION_INVALIDATE_CACHE broadcasts from ExpoScreenTimeModule.
+    private val cacheInvalidationReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == ACTION_INVALIDATE_CACHE) refreshGroupCache()
+        }
     }
 
     private val repo by lazy { BalanceRepository(this) }
@@ -572,6 +599,24 @@ class AppWatcherService : AccessibilityService() {
         // Rebuild group cache immediately so the first accessibility event has up-to-date mappings.
         refreshGroupCache()
 
+        // Register cache-invalidation receiver for group membership changes (KI-002).
+        // minSdkVersion = 24, targetSdkVersion = 36:
+        // API 33+ requires RECEIVER_NOT_EXPORTED to avoid SecurityException.
+        // API 24..32 does not support the 3-arg overload (would throw NoSuchMethodError),
+        // so it uses the standard 2-arg registerReceiver.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(
+                cacheInvalidationReceiver,
+                IntentFilter(ACTION_INVALIDATE_CACHE),
+                Context.RECEIVER_NOT_EXPORTED
+            )
+        } else {
+            registerReceiver(
+                cacheInvalidationReceiver,
+                IntentFilter(ACTION_INVALIDATE_CACHE)
+            )
+        }
+
         val foregroundPkg = try { rootInActiveWindow?.packageName?.toString() } catch (e: Exception) { null }
 
         scope.launch {
@@ -609,6 +654,11 @@ class AppWatcherService : AccessibilityService() {
     override fun onDestroy() {
         cancelTrackingNotification()
         getPrefs().unregisterOnSharedPreferenceChangeListener(prefListener)
+        try {
+            unregisterReceiver(cacheInvalidationReceiver)
+        } catch (_: IllegalArgumentException) {
+            // Receiver was never registered (service destroyed before onServiceConnected).
+        }
         Thread {
             runBlocking {
                 TelemetryLogger.log(applicationContext, "SERVICE_STOP", "AppWatcherService accessibility destroyed")

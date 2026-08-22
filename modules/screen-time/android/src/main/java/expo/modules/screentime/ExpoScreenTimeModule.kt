@@ -3,9 +3,13 @@ package expo.modules.screentime
 import android.content.Context
 import android.content.SharedPreferences
 import android.content.Intent
-import com.clancy.appace.BalanceRepository
-import com.clancy.appace.AccrualWorker
 import com.clancy.appace.AppDatabase
+import com.clancy.appace.AppGroupEntity
+import com.clancy.appace.AppGroupMemberEntity
+import com.clancy.appace.AppWatcherService
+import com.clancy.appace.BalanceRepository
+import com.clancy.appace.GroupBalanceRepository
+import com.clancy.appace.AccrualWorker
 import com.clancy.appace.TelemetryEntity
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
@@ -15,6 +19,7 @@ import kotlinx.coroutines.*
 class ExpoScreenTimeModule : Module() {
     private val context: Context get() = appContext.reactContext ?: error("React context not available")
     private val repo: BalanceRepository by lazy { BalanceRepository(context) }
+    private val groupRepo: GroupBalanceRepository by lazy { GroupBalanceRepository(context) }
     private val prefs: SharedPreferences
         get() = context.getSharedPreferences("appace_prefs", Context.MODE_PRIVATE)
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -288,6 +293,166 @@ class ExpoScreenTimeModule : Module() {
                     val db = AppDatabase.getInstance(context)
                     db.telemetryDao().clearLogs()
                     promise.resolve(null)
+                } catch (e: Exception) {
+                    promise.reject("ERR_DB", e.message, e)
+                }
+            }
+        }
+
+        AsyncFunction("getAppGroups") { promise: Promise ->
+            scope.launch {
+                try {
+                    val db = AppDatabase.getInstance(context)
+                    val groups = db.appGroupDao().getAllGroups()
+                    val result = groups.map { g ->
+                        val members = db.appGroupDao().getMembersForGroup(g.id).map { it.packageName }
+                        mapOf(
+                            "id"                        to g.id,
+                            "name"                      to g.name,
+                            "ordinal"                   to g.ordinal,
+                            "balanceSeconds"            to g.balanceSeconds,
+                            "windowStartHour"           to g.windowStartHour,
+                            "windowEndHour"             to g.windowEndHour,
+                            "openingBalanceMinutes"     to (g.openingBalanceSeconds / 60).toInt(),
+                            "hourlyAccrualMinutes"      to (g.hourlyAccrualSeconds / 60).toInt(),
+                            "accrualIntervalHours"      to g.accrualIntervalHours,
+                            "budgetType"                to g.budgetType,
+                            "compoundingBase"           to g.compoundingBase,
+                            "compoundingCoefficient"    to g.compoundingCoefficient,
+                            "emergencyBudgetSeconds"    to g.emergencyBudgetSeconds,
+                            "emergencyUsedSeconds"      to g.emergencyUsedSeconds,
+                            "emergencyRemainingSeconds" to maxOf(0L, g.emergencyBudgetSeconds - g.emergencyUsedSeconds),
+                            "packages"                  to members
+                        )
+                    }
+                    promise.resolve(result)
+                } catch (e: Exception) {
+                    promise.reject("ERR_DB", e.message, e)
+                }
+            }
+        }
+
+        AsyncFunction("createAppGroup") { input: Map<String, Any?>, promise: Promise ->
+            scope.launch {
+                try {
+                    val db = AppDatabase.getInstance(context)
+                    val entity = AppGroupEntity(
+                        name                   = input["name"] as String,
+                        windowStartHour        = (input["windowStartHour"] as Number).toInt(),
+                        windowEndHour          = (input["windowEndHour"] as Number).toInt(),
+                        openingBalanceSeconds  = (input["openingBalanceMinutes"] as Number).toLong() * 60L,
+                        hourlyAccrualSeconds   = (input["hourlyAccrualMinutes"] as Number).toLong() * 60L,
+                        accrualIntervalHours   = (input["accrualIntervalHours"] as Number).toInt(),
+                        budgetType             = input["budgetType"] as String,
+                        compoundingBase        = (input["compoundingBase"] as Number).toLong(),
+                        compoundingCoefficient = (input["compoundingCoefficient"] as Number).toFloat(),
+                        emergencyBudgetSeconds = (input["emergencyBudgetMinutes"] as Number).toLong() * 60L
+                    )
+                    val newId = db.appGroupDao().insertGroup(entity).toInt()
+                    // Enforce 1-app-1-group invariant: deleteMember removes from any prior group.
+                    @Suppress("UNCHECKED_CAST")
+                    val packages = input["packages"] as? List<String> ?: emptyList()
+                    for (pkg in packages) {
+                        db.appGroupDao().deleteMember(pkg)
+                        db.appGroupDao().insertMember(AppGroupMemberEntity(newId, pkg))
+                    }
+                    // Best-effort: cache update is async; JS callers should not assume
+                    // the service cache is current the instant this promise resolves.
+                    AppWatcherService.invalidateGroupCache(context)
+                    promise.resolve(newId)
+                } catch (e: Exception) {
+                    promise.reject("ERR_DB", e.message, e)
+                }
+            }
+        }
+
+        AsyncFunction("updateGroupSettings") { groupId: Int, input: Map<String, Any?>, promise: Promise ->
+            scope.launch {
+                try {
+                    val db = AppDatabase.getInstance(context)
+                    val existing = db.appGroupDao().getGroupById(groupId)
+                        ?: return@launch promise.reject("ERR_NOT_FOUND", "Group $groupId not found", null)
+                    val updated = existing.copy(
+                        name                   = input["name"] as String,
+                        windowStartHour        = (input["windowStartHour"] as Number).toInt(),
+                        windowEndHour          = (input["windowEndHour"] as Number).toInt(),
+                        openingBalanceSeconds  = (input["openingBalanceMinutes"] as Number).toLong() * 60L,
+                        hourlyAccrualSeconds   = (input["hourlyAccrualMinutes"] as Number).toLong() * 60L,
+                        accrualIntervalHours   = (input["accrualIntervalHours"] as Number).toInt(),
+                        budgetType             = input["budgetType"] as String,
+                        compoundingBase        = (input["compoundingBase"] as Number).toLong(),
+                        compoundingCoefficient = (input["compoundingCoefficient"] as Number).toFloat(),
+                        emergencyBudgetSeconds = (input["emergencyBudgetMinutes"] as Number).toLong() * 60L
+                    )
+                    db.appGroupDao().updateGroup(updated)
+                    @Suppress("UNCHECKED_CAST")
+                    val packages = input["packages"] as? List<String>
+                    if (packages != null) {
+                        db.appGroupDao().clearMembersForGroup(groupId)
+                        for (pkg in packages) {
+                            db.appGroupDao().deleteMember(pkg) // remove from any other group first
+                            db.appGroupDao().insertMember(AppGroupMemberEntity(groupId, pkg))
+                        }
+                    }
+                    // Best-effort: cache update is async (KI-002).
+                    AppWatcherService.invalidateGroupCache(context)
+                    promise.resolve(null)
+                } catch (e: Exception) {
+                    promise.reject("ERR_DB", e.message, e)
+                }
+            }
+        }
+
+        AsyncFunction("deleteAppGroup") { groupId: Int, promise: Promise ->
+            scope.launch {
+                try {
+                    val db = AppDatabase.getInstance(context)
+                    val group = db.appGroupDao().getGroupById(groupId)
+                        ?: return@launch promise.resolve(null) // already gone — idempotent
+                    db.appGroupDao().deleteGroup(group) // CASCADE removes members
+                    AppWatcherService.invalidateGroupCache(context)
+                    promise.resolve(null)
+                } catch (e: Exception) {
+                    promise.reject("ERR_DB", e.message, e)
+                }
+            }
+        }
+
+        AsyncFunction("addAppToGroup") { packageName: String, groupId: Int, promise: Promise ->
+            scope.launch {
+                try {
+                    val db = AppDatabase.getInstance(context)
+                    // Enforce 1-app-1-group: remove from any prior group first
+                    db.appGroupDao().deleteMember(packageName)
+                    db.appGroupDao().insertMember(AppGroupMemberEntity(groupId, packageName))
+                    AppWatcherService.invalidateGroupCache(context)
+                    promise.resolve(null)
+                } catch (e: Exception) {
+                    promise.reject("ERR_DB", e.message, e)
+                }
+            }
+        }
+
+        AsyncFunction("removeAppFromGroup") { packageName: String, promise: Promise ->
+            scope.launch {
+                try {
+                    val db = AppDatabase.getInstance(context)
+                    db.appGroupDao().deleteMember(packageName)
+                    AppWatcherService.invalidateGroupCache(context)
+                    promise.resolve(null)
+                } catch (e: Exception) {
+                    promise.reject("ERR_DB", e.message, e)
+                }
+            }
+        }
+
+        AsyncFunction("applyEmergencyTopUp") { groupId: Int, requestedSeconds: Int, promise: Promise ->
+            scope.launch {
+                try {
+                    // applyEmergencyTopUp holds GroupBalanceRepository.mutex for its full
+                    // execution — safe against concurrent deductions from runTrackingLoop.
+                    val granted = groupRepo.applyEmergencyTopUp(groupId, requestedSeconds.toLong())
+                    promise.resolve(granted.toInt())
                 } catch (e: Exception) {
                     promise.reject("ERR_DB", e.message, e)
                 }

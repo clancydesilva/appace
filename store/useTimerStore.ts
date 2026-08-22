@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import ScreenTime, { AppaceSettings, InstalledApp, TelemetryLog } from '../modules/screen-time';
+import ScreenTime, { AppaceSettings, AppGroup, CreateGroupInput, InstalledApp, TelemetryLog } from '../modules/screen-time';
 import { BudgetType } from '../constants/defaults';
 
 interface TimerStore {
@@ -18,6 +18,7 @@ interface TimerStore {
   usageAccessGranted: boolean;
   onboardingCompleted: boolean;
   telemetryLogs: TelemetryLog[];
+  appGroups: AppGroup[];
 
   checkOnboarding: () => Promise<boolean>;
   setOnboardingCompleted: (completed: boolean) => Promise<void>;
@@ -42,6 +43,13 @@ interface TimerStore {
   startService: () => Promise<void>;
   fetchTelemetryLogs: () => Promise<void>;
   clearTelemetryLogs: () => Promise<void>;
+  fetchAppGroups: () => Promise<void>;
+  createAppGroup: (input: CreateGroupInput) => Promise<number>;
+  updateGroupSettings: (groupId: number, input: CreateGroupInput) => Promise<void>;
+  deleteAppGroup: (groupId: number) => Promise<void>;
+  addAppToGroup: (packageName: string, groupId: number) => Promise<void>;
+  removeAppFromGroup: (packageName: string) => Promise<void>;
+  applyEmergencyTopUp: (groupId: number, seconds: number) => Promise<number>;
 }
 
 export const useTimerStore = create<TimerStore>((set, get) => ({
@@ -60,6 +68,7 @@ export const useTimerStore = create<TimerStore>((set, get) => ({
   usageAccessGranted: false,
   onboardingCompleted: false,
   telemetryLogs: [],
+  appGroups: [],
 
   checkOnboarding: async () => {
     const completed = await ScreenTime.isOnboardingCompleted();
@@ -135,5 +144,32 @@ export const useTimerStore = create<TimerStore>((set, get) => ({
   clearTelemetryLogs: async () => {
     await ScreenTime.clearTelemetryLogs();
     set({ telemetryLogs: [] });
+  },
+  fetchAppGroups: async () => set({ appGroups: await ScreenTime.getAppGroups() }),
+  createAppGroup: async (input: CreateGroupInput): Promise<number> => {
+    const newId = await ScreenTime.createAppGroup(input);
+    await get().fetchAppGroups();
+    return newId;
+  },
+  updateGroupSettings: async (groupId: number, input: CreateGroupInput): Promise<void> => {
+    await ScreenTime.updateGroupSettings(groupId, input);
+    await get().fetchAppGroups();
+  },
+  deleteAppGroup: async (groupId: number): Promise<void> => {
+    await ScreenTime.deleteAppGroup(groupId);
+    await get().fetchAppGroups();
+  },
+  addAppToGroup: async (packageName: string, groupId: number): Promise<void> => {
+    await ScreenTime.addAppToGroup(packageName, groupId);
+    await get().fetchAppGroups();
+  },
+  removeAppFromGroup: async (packageName: string): Promise<void> => {
+    await ScreenTime.removeAppFromGroup(packageName);
+    await get().fetchAppGroups();
+  },
+  applyEmergencyTopUp: async (groupId: number, seconds: number): Promise<number> => {
+    const granted = await ScreenTime.applyEmergencyTopUp(groupId, seconds);
+    await get().fetchAppGroups();
+    return granted;
   },
 }));

@@ -47,3 +47,38 @@ export interface TelemetryLog {
   /** Human-readable detail string for the event. */
   details: string;
 }
+
+/** A fully-hydrated app group as returned by getAppGroups(). */
+export interface AppGroup {
+  id: number;
+  name: string;
+  ordinal: number;
+  balanceSeconds: number;
+  windowStartHour: number;
+  windowEndHour: number;
+  openingBalanceMinutes: number;
+  hourlyAccrualMinutes: number;
+  accrualIntervalHours: number;
+  budgetType: 'standard' | 'compounding' | 'custom';
+  compoundingBase: number;        // seconds
+  compoundingCoefficient: number; // float
+  emergencyBudgetSeconds: number;
+  emergencyUsedSeconds: number;
+  emergencyRemainingSeconds: number;
+  packages: string[];             // packageNames of all member apps
+}
+
+/** Input shape for createAppGroup() and updateGroupSettings(). */
+export interface CreateGroupInput {
+  name: string;
+  packages: string[];
+  windowStartHour: number;
+  windowEndHour: number;
+  openingBalanceMinutes: number;
+  hourlyAccrualMinutes: number;
+  accrualIntervalHours: number;
+  budgetType: 'standard' | 'compounding' | 'custom';
+  compoundingBase: number;        // seconds
+  compoundingCoefficient: number;
+  emergencyBudgetMinutes: number;
+}
