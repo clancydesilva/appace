@@ -65,6 +65,7 @@ class AppWatcherService : AccessibilityService() {
     @Volatile private var currentTrackedApp: String? = null
     @Volatile private var lastDeductionTime: Long = 0
     @Volatile private var activeTrackingJob: Job? = null
+    @Volatile private var activeBlockJob: Job? = null    // Bounded block verification loop (KI-014)
     @Volatile private var pendingCancelJob: Job? = null  // delayed notification dismissal
     @Volatile private var graceJob: Job? = null          // 5s grace before wiping tracking state
 
@@ -312,10 +313,7 @@ class AppWatcherService : AccessibilityService() {
         }
 
         if (initialBalance <= 0L && inWindow) {
-            TelemetryLogger.log(applicationContext, "BLOCK", "Redirected $pkg (0s remaining)")
-            cancelTrackingNotification()
-            launchTimesUpScreen()
-            currentTrackedApp = null
+            withContext(Dispatchers.Main) { enforceBlockAndRedirect(pkg) }
             return
         }
 
@@ -372,9 +370,7 @@ class AppWatcherService : AccessibilityService() {
 
                 if (lastKnownBalance <= 0L && nowInWindow) {
                     TelemetryLogger.log(applicationContext, "BLOCK", "Active limit hit inside $pkg (0s remaining)")
-                    cancelTrackingNotification()
-                    launchTimesUpScreen()
-                    currentTrackedApp = null
+                    withContext(Dispatchers.Main) { enforceBlockAndRedirect(pkg) }
                     break
                 }
             }
@@ -408,9 +404,7 @@ class AppWatcherService : AccessibilityService() {
 
                 if (postAccrualBalance <= 0L && nowInWindow) {
                     TelemetryLogger.log(applicationContext, "BLOCK", "Active limit hit inside $pkg (0s projected remaining)")
-                    cancelTrackingNotification()
-                    launchTimesUpScreen()
-                    currentTrackedApp = null
+                    withContext(Dispatchers.Main) { enforceBlockAndRedirect(pkg) }
                     break
                 }
             }
@@ -562,11 +556,41 @@ class AppWatcherService : AccessibilityService() {
                     lastDeductionTime = SystemClock.elapsedRealtime()
                 }
 
+                // Run accrual check before testing initialBalance
+                if (repo.isAccrualNeeded()) repo.tick()
+                if (incomingGroupId != null) groupRepo.tick()
+
+                val windowStart: Int
+                val windowEnd: Int
+                if (incomingGroupId != null) {
+                    val g = groupRepo.getGroup(incomingGroupId)
+                    windowStart = g?.windowStartHour ?: 0
+                    windowEnd   = g?.windowEndHour   ?: 24
+                } else {
+                    val b = repo.getBalance()
+                    windowStart = b.windowStartHour
+                    windowEnd   = b.windowEndHour
+                }
+
                 val initialBalance = if (incomingGroupId != null) {
                     groupRepo.getGroup(incomingGroupId)?.balanceSeconds ?: 0L
                 } else {
                     repo.getBalance().balanceSeconds
                 }
+
+                val inWindow = if (incomingGroupId != null) {
+                    val h = LocalDateTime.now().hour
+                    h >= windowStart && h < windowEnd
+                } else {
+                    repo.isWithinWindow()
+                }
+
+                // Zero-balance guard: enforce block immediately without posting tracking notification
+                if (initialBalance <= 0L && inWindow) {
+                    withContext(Dispatchers.Main) { enforceBlockAndRedirect(pkg) }
+                    return@launch
+                }
+
                 val groupName = incomingGroupId?.let { groupIdToName[it] }
                 withContext(Dispatchers.Main) { postTrackingNotification(pkg, initialBalance, groupName) }
 
@@ -648,31 +672,139 @@ class AppWatcherService : AccessibilityService() {
                 currentTrackedApp = foregroundPkg
                 currentGroupId = resumeGroupId
                 lastDeductionTime = SystemClock.elapsedRealtime()
+
+                if (repo.isAccrualNeeded()) repo.tick()
+                if (resumeGroupId != null) groupRepo.tick()
+
+                val windowStart: Int
+                val windowEnd: Int
+                if (resumeGroupId != null) {
+                    val g = groupRepo.getGroup(resumeGroupId)
+                    windowStart = g?.windowStartHour ?: 0
+                    windowEnd   = g?.windowEndHour   ?: 24
+                } else {
+                    val b = repo.getBalance()
+                    windowStart = b.windowStartHour
+                    windowEnd   = b.windowEndHour
+                }
+
                 val initialBalance = if (resumeGroupId != null) {
                     groupRepo.getGroup(resumeGroupId)?.balanceSeconds ?: 0L
                 } else {
                     repo.getBalance().balanceSeconds
                 }
-                val groupName = resumeGroupId?.let { groupIdToName[it] }
-                withContext(Dispatchers.Main) { postTrackingNotification(foregroundPkg, initialBalance, groupName) }
-                activeTrackingJob?.cancel()
-                activeTrackingJob = scope.launch { runTrackingLoop(foregroundPkg, resumeGroupId) }
+
+                val inWindow = if (resumeGroupId != null) {
+                    val h = LocalDateTime.now().hour
+                    h >= windowStart && h < windowEnd
+                } else {
+                    repo.isWithinWindow()
+                }
+
+                if (initialBalance <= 0L && inWindow) {
+                    withContext(Dispatchers.Main) { enforceBlockAndRedirect(foregroundPkg) }
+                } else {
+                    val groupName = resumeGroupId?.let { groupIdToName[it] }
+                    withContext(Dispatchers.Main) { postTrackingNotification(foregroundPkg, initialBalance, groupName) }
+                    activeTrackingJob?.cancel()
+                    activeTrackingJob = scope.launch { runTrackingLoop(foregroundPkg, resumeGroupId) }
+                }
             }
         }
     }
 
     private fun launchTimesUpScreen() {
-        // Launch Appace directly over the tracked app — no Home Screen flash.
+        // Launch Appace directly over the tracked app — secondary UX attempt
         val intent = packageManager.getLaunchIntentForPackage(packageName)?.apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
         }
-        if (intent != null) startActivity(intent)
+        if (intent != null) {
+            try {
+                startActivity(intent)
+            } catch (e: Exception) {
+                scope.launch {
+                    TelemetryLogger.log(applicationContext, "RAW_EVENT", "LaunchTimesUpScreenFailed: ${e.message}")
+                }
+            }
+        }
+    }
+
+    /**
+     * Unconditionally terminates access to a blocked [pkg] whose balance is exhausted.
+     *
+     * 1. Cancels tracking notification and active drain loop.
+     * 2. Clears [currentTrackedApp] and [currentGroupId] so subsequent events re-evaluate fresh.
+     * 3. Fires [GLOBAL_ACTION_HOME] immediately as the primary, guaranteed OS exit.
+     * 4. Attempts [launchTimesUpScreen] as secondary UX.
+     * 5. Runs a bounded verification loop (500ms interval, max 6 attempts = 3s).
+     *    - Logs [BLOCK_CLEARED] upon successful exit.
+     *    - Logs [BLOCK_EXHAUSTED] if the app remains in the foreground after all 6 attempts.
+     */
+    private fun enforceBlockAndRedirect(pkg: String) {
+        cancelTrackingNotification()
+        activeTrackingJob?.cancel()
+        currentTrackedApp = null
+        currentGroupId = null
+
+        // Cancel previous verification loop if one is still running (prevents concurrent races)
+        activeBlockJob?.cancel()
+
+        // 1. Primary: OS-level Home action (guaranteed capability of AccessibilityService)
+        performGlobalAction(GLOBAL_ACTION_HOME)
+
+        // 2. Secondary: Attempt to surface Appace
+        launchTimesUpScreen()
+
+        // 3. Bounded verification loop: re-check rootInActiveWindow for up to 3s
+        activeBlockJob = scope.launch {
+            TelemetryLogger.log(applicationContext, "BLOCK", "Enforced GLOBAL_ACTION_HOME for $pkg (0s remaining)")
+            var attempts = 0
+            val maxAttempts = 6
+            var cleared = false
+
+            while (attempts < maxAttempts && isActive) {
+                delay(500)
+                attempts++
+
+                val foreground = try {
+                    rootInActiveWindow?.packageName?.toString()
+                } catch (e: Exception) {
+                    null
+                }
+
+                // Clean exit condition: user has moved away from the blocked app
+                if (foreground == null || foreground != pkg) {
+                    cleared = true
+                    TelemetryLogger.log(
+                        applicationContext, "BLOCK_CLEARED",
+                        "Cleared $pkg from foreground after $attempts attempt(s) (now: $foreground)"
+                    )
+                    break
+                }
+
+                // Still in the blocked app: re-fire HOME action and retry
+                TelemetryLogger.log(
+                    applicationContext, "BLOCK",
+                    "Re-enforcing GLOBAL_ACTION_HOME for $pkg (attempt $attempts/$maxAttempts)"
+                )
+                performGlobalAction(GLOBAL_ACTION_HOME)
+                launchTimesUpScreen()
+            }
+
+            if (!cleared && isActive) {
+                TelemetryLogger.log(
+                    applicationContext, "BLOCK_EXHAUSTED",
+                    "Failed to clear $pkg after $maxAttempts attempts (still foreground)"
+                )
+            }
+        }
     }
 
     override fun onInterrupt() {}
 
     override fun onDestroy() {
         cancelTrackingNotification()
+        activeBlockJob?.cancel()
         getPrefs().unregisterOnSharedPreferenceChangeListener(prefListener)
         try {
             unregisterReceiver(cacheInvalidationReceiver)
