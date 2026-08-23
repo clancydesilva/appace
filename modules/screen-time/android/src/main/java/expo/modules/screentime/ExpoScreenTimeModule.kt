@@ -11,6 +11,7 @@ import com.clancy.appace.BalanceRepository
 import com.clancy.appace.GroupBalanceRepository
 import com.clancy.appace.AccrualWorker
 import com.clancy.appace.TelemetryEntity
+import com.clancy.appace.TelemetryLogger
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.kotlin.Promise
@@ -26,6 +27,22 @@ class ExpoScreenTimeModule : Module() {
 
     private fun isDebuggable(): Boolean {
         return (context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
+    }
+
+    /**
+     * Synchronizes SharedPreferences "tracked_apps" with the union of all group members in Room DB.
+     * Guarantees that any legacy helper, widget, or background fallback reading SharedPreferences
+     * receives an up-to-date set of all tracked packages.
+     */
+    private suspend fun syncTrackedAppsPrefs() = withContext(Dispatchers.IO) {
+        try {
+            val db = AppDatabase.getInstance(context)
+            val allMemberships = db.appGroupDao().getAllMemberships()
+            val allPackages = allMemberships.map { it.packageName }.toSet()
+            prefs.edit().putStringSet("tracked_apps", allPackages).apply()
+        } catch (e: Exception) {
+            TelemetryLogger.log(context, "RAW_EVENT", "SyncTrackedAppsPrefsFailed: ${e.message}")
+        }
     }
 
     override fun definition() = ModuleDefinition {
@@ -261,6 +278,7 @@ class ExpoScreenTimeModule : Module() {
         AsyncFunction("startForegroundService") { ->
             scope.launch {
                 repo.initIfEmpty()
+                groupRepo.tick()
             }
             AccrualWorker.schedule(context)
             Unit
@@ -356,9 +374,9 @@ class ExpoScreenTimeModule : Module() {
                         db.appGroupDao().deleteMember(pkg)
                         db.appGroupDao().insertMember(AppGroupMemberEntity(newId, pkg))
                     }
-                    // Best-effort: cache update is async; JS callers should not assume
-                    // the service cache is current the instant this promise resolves.
+                    syncTrackedAppsPrefs()
                     AppWatcherService.invalidateGroupCache(context)
+                    groupRepo.tick()
                     promise.resolve(newId)
                 } catch (e: Exception) {
                     promise.reject("ERR_DB", e.message, e)
@@ -394,8 +412,9 @@ class ExpoScreenTimeModule : Module() {
                             db.appGroupDao().insertMember(AppGroupMemberEntity(groupId, pkg))
                         }
                     }
-                    // Best-effort: cache update is async (KI-002).
+                    syncTrackedAppsPrefs()
                     AppWatcherService.invalidateGroupCache(context)
+                    groupRepo.tick()
                     promise.resolve(null)
                 } catch (e: Exception) {
                     promise.reject("ERR_DB", e.message, e)
@@ -410,6 +429,7 @@ class ExpoScreenTimeModule : Module() {
                     val group = db.appGroupDao().getGroupById(groupId)
                         ?: return@launch promise.resolve(null) // already gone — idempotent
                     db.appGroupDao().deleteGroup(group) // CASCADE removes members
+                    syncTrackedAppsPrefs()
                     AppWatcherService.invalidateGroupCache(context)
                     promise.resolve(null)
                 } catch (e: Exception) {
@@ -425,6 +445,7 @@ class ExpoScreenTimeModule : Module() {
                     // Enforce 1-app-1-group: remove from any prior group first
                     db.appGroupDao().deleteMember(packageName)
                     db.appGroupDao().insertMember(AppGroupMemberEntity(groupId, packageName))
+                    syncTrackedAppsPrefs()
                     AppWatcherService.invalidateGroupCache(context)
                     promise.resolve(null)
                 } catch (e: Exception) {
@@ -438,6 +459,7 @@ class ExpoScreenTimeModule : Module() {
                 try {
                     val db = AppDatabase.getInstance(context)
                     db.appGroupDao().deleteMember(packageName)
+                    syncTrackedAppsPrefs()
                     AppWatcherService.invalidateGroupCache(context)
                     promise.resolve(null)
                 } catch (e: Exception) {

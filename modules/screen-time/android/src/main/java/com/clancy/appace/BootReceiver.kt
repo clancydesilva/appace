@@ -13,7 +13,8 @@ class BootReceiver : BroadcastReceiver() {
             scope.launch {
                 try {
                     BalanceRepository(context.applicationContext).initIfEmpty()
-                    TelemetryLogger.log(context.applicationContext, "BOOT", "Device rebooted, scheduled AccrualWorker")
+                    GroupBalanceRepository(context.applicationContext).tick()
+                    TelemetryLogger.log(context.applicationContext, "BOOT", "Device rebooted, ticked groupRepo and scheduled AccrualWorker")
                 } finally {
                     pendingResult.finish()
                 }
