@@ -244,10 +244,18 @@ class ExpoScreenTimeModule : Module() {
         }
 
         AsyncFunction("openBatteryOptimizationSettings") { ->
-            val intent = Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            try {
+                val intent = Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                    data = android.net.Uri.parse("package:${context.packageName}")
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                context.startActivity(intent)
+            } catch (e: Exception) {
+                val fallbackIntent = Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                context.startActivity(fallbackIntent)
             }
-            context.startActivity(intent)
         }
 
         AsyncFunction("isUsageAccessGranted") { ->

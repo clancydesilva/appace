@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, SafeAreaView, KeyboardAvoidingView } from 'react-native';
+import { View, Text, SafeAreaView, KeyboardAvoidingView, AppState, AppStateStatus } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTimerStore } from '../store/useTimerStore';
 import { StepWelcome } from '../components/onboarding/StepWelcome';
-import { StepBudget } from '../components/onboarding/StepBudget';
 import { StepAccessibility } from '../components/onboarding/StepAccessibility';
 import { StepUsageAccess } from '../components/onboarding/StepUsageAccess';
 import { StepBattery } from '../components/onboarding/StepBattery';
@@ -22,56 +21,63 @@ export default function OnboardingScreen() {
   const permissionTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    // Clean up timers on unmount
+    // AppState listener to re-check permissions when returning from Settings
+    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+      if (nextAppState === 'active') {
+        store.checkAccessibility();
+        store.checkUsageAccess();
+        store.checkBatteryOptimization();
+      }
+    });
+
     return () => {
+      subscription.remove();
       if (permissionTimer.current) clearInterval(permissionTimer.current);
     };
   }, []);
 
-  // Step 3 (Accessibility) auto-advance polling
+  // Step 2 (Accessibility), Step 3 (Usage), and Step 4 (Battery) auto-polling
   useEffect(() => {
-    if (step === 3) {
+    if (permissionTimer.current) {
+      clearInterval(permissionTimer.current);
+      permissionTimer.current = null;
+    }
+
+    if (step === 2) {
       store.checkAccessibility();
       permissionTimer.current = setInterval(() => {
         store.checkAccessibility();
       }, 1000);
-    } else if (step === 4) {
+    } else if (step === 3) {
       store.checkUsageAccess();
       permissionTimer.current = setInterval(() => {
         store.checkUsageAccess();
       }, 1000);
-    } else {
-      if (permissionTimer.current) {
-        clearInterval(permissionTimer.current);
-        permissionTimer.current = null;
-      }
+    } else if (step === 4) {
+      store.checkBatteryOptimization();
+      permissionTimer.current = setInterval(() => {
+        store.checkBatteryOptimization();
+      }, 1000);
     }
   }, [step]);
 
   // Auto-advance when accessibility permission is detected
   useEffect(() => {
-    if (step === 3 && store.accessibilityEnabled) {
-      setStep(4);
+    if (step === 2 && store.accessibilityEnabled) {
+      setStep(3);
     }
   }, [store.accessibilityEnabled, step]);
 
   // Auto-advance when usage access permission is detected
   useEffect(() => {
-    if (step === 4 && store.usageAccessGranted) {
-      setStep(5);
+    if (step === 3 && store.usageAccessGranted) {
+      setStep(4);
     }
   }, [store.usageAccessGranted, step]);
 
-  // Step 5 (Battery) status polling
+  // Step 6 (Apps) fetch list
   useEffect(() => {
-    if (step === 5) {
-      store.checkBatteryOptimization();
-    }
-  }, [step]);
-
-  // Step 7 (Apps) fetch list
-  useEffect(() => {
-    if (step === 7) {
+    if (step === 6) {
       setLoadingApps(true);
       store.fetchInstalledApps()
         .then(() => store.fetchAppGroups())
@@ -87,7 +93,7 @@ export default function OnboardingScreen() {
 
   const renderDotIndicator = () => (
     <View style={styles.indicatorContainer}>
-      {[1, 2, 3, 4, 5, 6, 7].map((i) => (
+      {[1, 2, 3, 4, 5, 6].map((i) => (
         <View
           key={i}
           style={[
@@ -110,12 +116,11 @@ export default function OnboardingScreen() {
 
         <View style={styles.contentContainer}>
           {step === 1 && <StepWelcome onNext={() => setStep(2)} />}
-          {step === 2 && <StepBudget onNext={() => setStep(3)} />}
-          {step === 3 && <StepAccessibility />}
-          {step === 4 && <StepUsageAccess onNext={() => setStep(5)} />}
-          {step === 5 && <StepBattery onNext={() => setStep(6)} />}
-          {step === 6 && <StepNotifications onNext={() => setStep(7)} />}
-          {step === 7 && (
+          {step === 2 && <StepAccessibility />}
+          {step === 3 && <StepUsageAccess onNext={() => setStep(4)} />}
+          {step === 4 && <StepBattery onNext={() => setStep(5)} />}
+          {step === 5 && <StepNotifications onNext={() => setStep(6)} />}
+          {step === 6 && (
             <StepGroupBuilder
               installedApps={store.installedApps}
               loadingApps={loadingApps}

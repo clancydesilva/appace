@@ -19,6 +19,7 @@ interface Props {
   onSelectGroup: (groupId: number) => Promise<void>;
   onRemoveFromGroup: () => Promise<void>;
   onCreateGroupAndAssign: (name: string) => Promise<void>;
+  onCreateNewGroup?: () => void;
   onClose: () => void;
 }
 
@@ -30,6 +31,7 @@ export function GroupPickerModal({
   onSelectGroup,
   onRemoveFromGroup,
   onCreateGroupAndAssign,
+  onCreateNewGroup,
   onClose,
 }: Props) {
   const [loading, setLoading] = useState(false);
@@ -189,7 +191,13 @@ export function GroupPickerModal({
                 ) : (
                   <TouchableOpacity
                     style={styles.createButtonTrigger}
-                    onPress={() => setIsCreating(true)}
+                    onPress={() => {
+                      if (onCreateNewGroup) {
+                        onCreateNewGroup();
+                      } else {
+                        setIsCreating(true);
+                      }
+                    }}
                   >
                     <Text style={styles.createButtonTriggerText}>＋ Create New Group</Text>
                   </TouchableOpacity>

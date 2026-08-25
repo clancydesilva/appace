@@ -16,6 +16,8 @@ import { formatHourLabel } from '../../utils/formatTime';
 interface Props {
   visible: boolean;
   group: AppGroup | null;
+  initialPackages?: string[];
+  initialName?: string;
   installedApps: InstalledApp[];
   allGroups: AppGroup[];
   onSave: (groupId: number | null, input: CreateGroupInput) => Promise<void>;
@@ -26,6 +28,8 @@ interface Props {
 export function GroupEditorModal({
   visible,
   group,
+  initialPackages,
+  initialName,
   installedApps,
   allGroups,
   onSave,
@@ -36,14 +40,15 @@ export function GroupEditorModal({
 
   const [name, setName] = useState('');
   const [startHourStr, setStartHourStr] = useState('6');
-  const [endHourStr, setEndHourStr] = useState('24');
+  const [endHourStr, setEndHourStr] = useState('22');
   const [openingMinsStr, setOpeningMinsStr] = useState('5');
   const [accrualMinsStr, setAccrualMinsStr] = useState('5');
   const [accrualIntervalStr, setAccrualIntervalStr] = useState('1');
   const [budgetType, setBudgetType] = useState<'standard' | 'compounding' | 'custom'>('standard');
+  const [customSubType, setCustomSubType] = useState<'standard' | 'compounding'>('standard');
   const [compoundingBaseMinsStr, setCompoundingBaseMinsStr] = useState('5');
-  const [compoundingCoeffStr, setCompoundingCoeffStr] = useState('1.0');
-  const [emergencyBudgetMinsStr, setEmergencyBudgetMinsStr] = useState('0');
+  const [compoundingCoeffStr, setCompoundingCoeffStr] = useState('2.0');
+  const [emergencyBudgetMinsStr, setEmergencyBudgetMinsStr] = useState('15');
 
   const [selectedPackages, setSelectedPackages] = useState<string[]>([]);
   const [isAddingApps, setIsAddingApps] = useState(false);
@@ -60,30 +65,36 @@ export function GroupEditorModal({
       setAccrualMinsStr(String(group.hourlyAccrualMinutes));
       setAccrualIntervalStr(String(group.accrualIntervalHours));
       setBudgetType(group.budgetType);
+      if (group.budgetType === 'custom') {
+        setCustomSubType(group.compoundingCoefficient > 0 ? 'compounding' : 'standard');
+      }
       setCompoundingBaseMinsStr(String(Math.round(group.compoundingBase / 60)));
-      setCompoundingCoeffStr(String(group.compoundingCoefficient));
+      setCompoundingCoeffStr(String(group.compoundingCoefficient || 2.0));
       setEmergencyBudgetMinsStr(String(Math.round(group.emergencyBudgetSeconds / 60)));
       setSelectedPackages(group.packages);
     } else {
       // Defaults for new group
-      setName('');
+      setName(initialName || '');
       setStartHourStr('6');
-      setEndHourStr('24');
+      setEndHourStr('22');
       setOpeningMinsStr('5');
       setAccrualMinsStr('5');
       setAccrualIntervalStr('1');
       setBudgetType('standard');
+      setCustomSubType('standard');
       setCompoundingBaseMinsStr('5');
-      setCompoundingCoeffStr('1.0');
-      setEmergencyBudgetMinsStr('0');
-      setSelectedPackages([]);
+      setCompoundingCoeffStr('2.0');
+      setEmergencyBudgetMinsStr('15');
+      setSelectedPackages(initialPackages || []);
     }
     setIsAddingApps(false);
     setAppSearchQuery('');
-  }, [group, visible]);
+  }, [group, visible, initialPackages, initialName]);
 
   const handleSelectStandard = () => {
     setBudgetType('standard');
+    setStartHourStr('6');
+    setEndHourStr('22');
     setOpeningMinsStr('5');
     setAccrualMinsStr('5');
     setAccrualIntervalStr('1');
@@ -91,9 +102,11 @@ export function GroupEditorModal({
 
   const handleSelectCompounding = () => {
     setBudgetType('compounding');
+    setStartHourStr('6');
+    setEndHourStr('22');
     setOpeningMinsStr('5');
     setCompoundingBaseMinsStr('5');
-    setCompoundingCoeffStr('1.0');
+    setCompoundingCoeffStr('2.0');
     setAccrualIntervalStr('1');
   };
 
@@ -131,8 +144,16 @@ export function GroupEditorModal({
     const accrual = Math.max(1, Math.min(60, parseInt(accrualMinsStr) || 5));
     const interval = Math.max(1, Math.min(24, parseInt(accrualIntervalStr) || 1));
     const compBaseSeconds = Math.max(60, (parseInt(compoundingBaseMinsStr) || 5) * 60);
-    const compCoeff = Math.max(0, parseFloat(compoundingCoeffStr) || 0);
+    const compCoeff = budgetType === 'compounding'
+      ? 2.0
+      : budgetType === 'custom' && customSubType === 'compounding'
+      ? Math.max(0, parseFloat(compoundingCoeffStr) || 0)
+      : 0;
     const emergencyMins = Math.max(0, Math.min(120, parseInt(emergencyBudgetMinsStr) || 0));
+
+    const effectiveBudgetType = budgetType === 'custom' && customSubType === 'compounding'
+      ? 'compounding'
+      : budgetType;
 
     const input: CreateGroupInput = {
       name: trimmedName,
@@ -142,7 +163,7 @@ export function GroupEditorModal({
       openingBalanceMinutes: opening,
       hourlyAccrualMinutes: accrual,
       accrualIntervalHours: interval,
-      budgetType,
+      budgetType: effectiveBudgetType,
       compoundingBase: compBaseSeconds,
       compoundingCoefficient: compCoeff,
       emergencyBudgetMinutes: emergencyMins,
@@ -158,6 +179,32 @@ export function GroupEditorModal({
       setSaving(false);
     }
   };
+
+  // Helper dynamic calculations
+  const parsedStart = Math.max(0, Math.min(23, parseInt(startHourStr) || 6));
+  const parsedEnd = Math.max(1, Math.min(24, parseInt(endHourStr) || 22));
+  const parsedOpening = Math.max(1, Math.min(60, parseInt(openingMinsStr) || 5));
+  const parsedAccrual = Math.max(1, Math.min(60, parseInt(accrualMinsStr) || 5));
+  const parsedInterval = Math.max(1, Math.min(24, parseInt(accrualIntervalStr) || 1));
+  const parsedCompBase = Math.max(1, parseInt(compoundingBaseMinsStr) || 5);
+  const parsedCompCoeff = budgetType === 'compounding'
+    ? 2.0
+    : Math.max(0, parseFloat(compoundingCoeffStr) || 2.0);
+
+  const windowDurationHours = Math.max(1, parsedEnd - parsedStart);
+  const totalStandardDrops = Math.floor(windowDurationHours / parsedInterval) + 1;
+  const standardDailyMax = parsedOpening + (totalStandardDrops * parsedAccrual);
+
+  // Compounding progression calculations
+  const compHr1 = parsedCompBase;
+  const compHr2 = Math.ceil(parsedCompBase + parsedCompCoeff);
+  const compHr3 = Math.ceil(parsedCompBase + (2 * parsedCompCoeff));
+  const compHr4 = Math.ceil(parsedCompBase + (3 * parsedCompCoeff));
+
+  let compDailyMax = parsedOpening;
+  for (let h = 0; h < windowDurationHours + 1; h++) {
+    compDailyMax += Math.ceil(parsedCompBase + (h * parsedCompCoeff));
+  }
 
   const handleDelete = () => {
     if (!group || !onDelete) return;
@@ -334,8 +381,15 @@ export function GroupEditorModal({
                 {budgetType === 'standard' && (
                   <View style={styles.presetInfoCard}>
                     <Text style={styles.presetInfoTitle}>Standard Linear Accrual</Text>
+                    <Text style={styles.presetFormulaLine}>
+                      Formula: {parsedOpening}m Opening + {parsedAccrual}m/hr
+                    </Text>
+                    <View style={styles.formulaSummaryRow}>
+                      <Text style={styles.formulaSummaryLabel}>Max Daily Budget:</Text>
+                      <Text style={styles.formulaSummaryValue}>{standardDailyMax} mins ({Math.floor(standardDailyMax / 60)}h {standardDailyMax % 60}m)</Text>
+                    </View>
                     <Text style={styles.presetInfoDesc}>
-                      5 mins granted at window open + 5 mins flat drop every hour.
+                      Consistent hourly drops throughout the active window ({formatHourLabel(parsedStart)} to {formatHourLabel(parsedEnd)}).
                     </Text>
                   </View>
                 )}
@@ -343,73 +397,184 @@ export function GroupEditorModal({
                 {budgetType === 'compounding' && (
                   <View style={styles.compoundingBox}>
                     <Text style={styles.presetInfoTitle}>Compounding Arithmetic Accrual</Text>
-                    <Text style={styles.presetInfoDesc}>
-                      Earns more time each consecutive hour: Base + (HourIndex × Increment).
+                    <Text style={styles.presetFormulaLine}>
+                      Formula: {parsedOpening}m Opening + (5m + streak × 2m)/hr
                     </Text>
-                    <View style={styles.twoColumnRow}>
-                      <View style={styles.columnItem}>
-                        <Text style={styles.subLabel}>Base (First Hour Mins)</Text>
-                        <TextInput
-                          style={styles.textInput}
-                          placeholder="5"
-                          placeholderTextColor="#555555"
-                          keyboardType="number-pad"
-                          value={compoundingBaseMinsStr}
-                          onChangeText={setCompoundingBaseMinsStr}
-                        />
+
+                    {/* Live 3-Hour Progression Preview */}
+                    <View style={styles.progressionPreviewCard}>
+                      <Text style={styles.progressionTitle}>IDLE STREAK REWARD PROGRESSION</Text>
+                      <View style={styles.progressionRow}>
+                        <Text style={styles.progressionStep}>Hour 1 (Baseline):</Text>
+                        <Text style={styles.progressionVal}>+{compHr1} mins</Text>
                       </View>
-                      <View style={styles.columnItem}>
-                        <Text style={styles.subLabel}>Increment (+Mins/hr)</Text>
-                        <TextInput
-                          style={styles.textInput}
-                          placeholder="1.0"
-                          placeholderTextColor="#555555"
-                          keyboardType="decimal-pad"
-                          value={compoundingCoeffStr}
-                          onChangeText={setCompoundingCoeffStr}
-                        />
+                      <View style={styles.progressionRow}>
+                        <Text style={styles.progressionStep}>Hour 2 (1 hr idle):</Text>
+                        <Text style={styles.progressionVal}>+{compHr2} mins</Text>
+                      </View>
+                      <View style={styles.progressionRow}>
+                        <Text style={styles.progressionStep}>Hour 3 (2 hrs idle):</Text>
+                        <Text style={styles.progressionVal}>+{compHr3} mins</Text>
+                      </View>
+                      <View style={styles.progressionRow}>
+                        <Text style={styles.progressionStep}>Hour 4 (3 hrs idle):</Text>
+                        <Text style={styles.progressionVal}>+{compHr4} mins</Text>
                       </View>
                     </View>
+
+                    <View style={styles.formulaSummaryRow}>
+                      <Text style={styles.formulaSummaryLabel}>Unbroken Daily Potential:</Text>
+                      <Text style={styles.formulaSummaryValue}>{compDailyMax} mins ({Math.floor(compDailyMax / 60)}h {compDailyMax % 60}m)</Text>
+                    </View>
+
+                    <Text style={styles.resetNoticeText}>
+                      Opening any app in this group resets the next hourly drop back to 5 mins.
+                    </Text>
                   </View>
                 )}
 
                 {budgetType === 'custom' && (
                   <View style={styles.customBox}>
-                    <View style={styles.twoColumnRow}>
-                      <View style={styles.columnItem}>
-                        <Text style={styles.subLabel}>Opening (Mins)</Text>
-                        <TextInput
-                          style={styles.textInput}
-                          placeholder="5"
-                          placeholderTextColor="#555555"
-                          keyboardType="number-pad"
-                          value={openingMinsStr}
-                          onChangeText={setOpeningMinsStr}
-                        />
-                      </View>
-                      <View style={styles.columnItem}>
-                        <Text style={styles.subLabel}>Hourly Drop (Mins)</Text>
-                        <TextInput
-                          style={styles.textInput}
-                          placeholder="5"
-                          placeholderTextColor="#555555"
-                          keyboardType="number-pad"
-                          value={accrualMinsStr}
-                          onChangeText={setAccrualMinsStr}
-                        />
-                      </View>
+                    {/* Custom Sub-Type Selector */}
+                    <View style={styles.subTypeRow}>
+                      <TouchableOpacity
+                        style={[
+                          styles.subTypeBtn,
+                          customSubType === 'standard' && styles.subTypeBtnActive,
+                        ]}
+                        onPress={() => setCustomSubType('standard')}
+                      >
+                        <Text
+                          style={[
+                            styles.subTypeBtnText,
+                            customSubType === 'standard' && styles.subTypeBtnTextActive,
+                          ]}
+                        >
+                          Custom Standard
+                        </Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[
+                          styles.subTypeBtn,
+                          customSubType === 'compounding' && styles.subTypeBtnActive,
+                        ]}
+                        onPress={() => setCustomSubType('compounding')}
+                      >
+                        <Text
+                          style={[
+                            styles.subTypeBtnText,
+                            customSubType === 'compounding' && styles.subTypeBtnTextActive,
+                          ]}
+                        >
+                          Custom Compounding
+                        </Text>
+                      </TouchableOpacity>
                     </View>
-                    <View style={styles.singleFieldRow}>
-                      <Text style={styles.subLabel}>Drop Interval (Hours)</Text>
-                      <TextInput
-                        style={styles.textInput}
-                        placeholder="1"
-                        placeholderTextColor="#555555"
-                        keyboardType="number-pad"
-                        value={accrualIntervalStr}
-                        onChangeText={setAccrualIntervalStr}
-                      />
-                    </View>
+
+                    {customSubType === 'standard' ? (
+                      <>
+                        <View style={styles.twoColumnRow}>
+                          <View style={styles.columnItem}>
+                            <Text style={styles.subLabel}>Opening (Mins)</Text>
+                            <TextInput
+                              style={styles.textInput}
+                              placeholder="5"
+                              placeholderTextColor="#555555"
+                              keyboardType="number-pad"
+                              value={openingMinsStr}
+                              onChangeText={setOpeningMinsStr}
+                            />
+                          </View>
+                          <View style={styles.columnItem}>
+                            <Text style={styles.subLabel}>Hourly Drop (Mins)</Text>
+                            <TextInput
+                              style={styles.textInput}
+                              placeholder="5"
+                              placeholderTextColor="#555555"
+                              keyboardType="number-pad"
+                              value={accrualMinsStr}
+                              onChangeText={setAccrualMinsStr}
+                            />
+                          </View>
+                        </View>
+                        <View style={styles.singleFieldRow}>
+                          <Text style={styles.subLabel}>Drop Interval (Hours)</Text>
+                          <TextInput
+                            style={styles.textInput}
+                            placeholder="1"
+                            placeholderTextColor="#555555"
+                            keyboardType="number-pad"
+                            value={accrualIntervalStr}
+                            onChangeText={setAccrualIntervalStr}
+                          />
+                        </View>
+                        <View style={styles.formulaSummaryRow}>
+                          <Text style={styles.formulaSummaryLabel}>Max Daily Budget:</Text>
+                          <Text style={styles.formulaSummaryValue}>{standardDailyMax} mins</Text>
+                        </View>
+                      </>
+                    ) : (
+                      <>
+                        <View style={styles.twoColumnRow}>
+                          <View style={styles.columnItem}>
+                            <Text style={styles.subLabel}>Opening (Mins)</Text>
+                            <TextInput
+                              style={styles.textInput}
+                              placeholder="5"
+                              placeholderTextColor="#555555"
+                              keyboardType="number-pad"
+                              value={openingMinsStr}
+                              onChangeText={setOpeningMinsStr}
+                            />
+                          </View>
+                          <View style={styles.columnItem}>
+                            <Text style={styles.subLabel}>Base Drop (Mins)</Text>
+                            <TextInput
+                              style={styles.textInput}
+                              placeholder="5"
+                              placeholderTextColor="#555555"
+                              keyboardType="number-pad"
+                              value={compoundingBaseMinsStr}
+                              onChangeText={setCompoundingBaseMinsStr}
+                            />
+                          </View>
+                        </View>
+                        <View style={styles.singleFieldRow}>
+                          <Text style={styles.subLabel}>Streak Increment (+Mins/hr)</Text>
+                          <TextInput
+                            style={styles.textInput}
+                            placeholder="2.0"
+                            placeholderTextColor="#555555"
+                            keyboardType="decimal-pad"
+                            value={compoundingCoeffStr}
+                            onChangeText={setCompoundingCoeffStr}
+                          />
+                        </View>
+
+                        {/* Live Progression Preview for Custom */}
+                        <View style={styles.progressionPreviewCard}>
+                          <Text style={styles.progressionTitle}>CUSTOM PROGRESSION PREVIEW</Text>
+                          <View style={styles.progressionRow}>
+                            <Text style={styles.progressionStep}>Hour 1 (Baseline):</Text>
+                            <Text style={styles.progressionVal}>+{compHr1} mins</Text>
+                          </View>
+                          <View style={styles.progressionRow}>
+                            <Text style={styles.progressionStep}>Hour 2 (1 hr idle):</Text>
+                            <Text style={styles.progressionVal}>+{compHr2} mins</Text>
+                          </View>
+                          <View style={styles.progressionRow}>
+                            <Text style={styles.progressionStep}>Hour 3 (2 hrs idle):</Text>
+                            <Text style={styles.progressionVal}>+{compHr3} mins</Text>
+                          </View>
+                        </View>
+
+                        <View style={styles.formulaSummaryRow}>
+                          <Text style={styles.formulaSummaryLabel}>Unbroken Daily Potential:</Text>
+                          <Text style={styles.formulaSummaryValue}>{compDailyMax} mins</Text>
+                        </View>
+                      </>
+                    )}
                   </View>
                 )}
               </View>
@@ -687,10 +852,40 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginBottom: 4,
   },
+  presetFormulaLine: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
+    fontFamily: 'monospace',
+    marginBottom: 8,
+  },
+  formulaSummaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#111111',
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginVertical: 6,
+    borderWidth: 1,
+    borderColor: '#202020',
+  },
+  formulaSummaryLabel: {
+    color: '#888888',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  formulaSummaryValue: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
+  },
   presetInfoDesc: {
     color: '#777777',
     fontSize: 12,
     lineHeight: 16,
+    marginTop: 4,
   },
   compoundingBox: {
     backgroundColor: '#1A1A1A',
@@ -699,12 +894,77 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#242424',
   },
+  progressionPreviewCard: {
+    backgroundColor: '#121212',
+    borderRadius: 6,
+    padding: 10,
+    marginVertical: 8,
+    borderWidth: 1,
+    borderColor: '#222222',
+  },
+  progressionTitle: {
+    color: '#888888',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+    marginBottom: 6,
+  },
+  progressionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 3,
+    borderBottomWidth: 1,
+    borderColor: '#181818',
+  },
+  progressionStep: {
+    color: '#AAAAAA',
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  progressionVal: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  resetNoticeText: {
+    color: '#888888',
+    fontSize: 11,
+    fontStyle: 'italic',
+    lineHeight: 15,
+    marginTop: 6,
+  },
   customBox: {
     backgroundColor: '#1A1A1A',
     borderRadius: 8,
     padding: 12,
     borderWidth: 1,
     borderColor: '#242424',
+  },
+  subTypeRow: {
+    flexDirection: 'row',
+    backgroundColor: '#111111',
+    borderRadius: 6,
+    padding: 2,
+    marginBottom: 12,
+  },
+  subTypeBtn: {
+    flex: 1,
+    paddingVertical: 6,
+    alignItems: 'center',
+    borderRadius: 4,
+  },
+  subTypeBtnActive: {
+    backgroundColor: '#2A2A2A',
+  },
+  subTypeBtnText: {
+    color: '#777777',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  subTypeBtnTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
   sectionHeaderRow: {
     flexDirection: 'row',

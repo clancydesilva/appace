@@ -399,4 +399,37 @@ export const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginLeft: 12,
   },
+  createdGroupsContainer: {
+    backgroundColor: '#141414',
+    borderWidth: 1,
+    borderColor: '#262626',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+  },
+  createdGroupsHeader: {
+    color: '#888888',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+    marginBottom: 8,
+  },
+  createdGroupRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 4,
+    borderBottomWidth: 1,
+    borderColor: '#1C1C1C',
+  },
+  createdGroupName: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  createdGroupCount: {
+    color: '#888888',
+    fontSize: 11,
+    fontWeight: '600',
+  },
 });

@@ -10,14 +10,17 @@ import {
   SafeAreaView,
 } from 'react-native';
 import { useTimerStore } from '../../store/useTimerStore';
-import { InstalledApp } from '../../modules/screen-time';
+import { InstalledApp, CreateGroupInput } from '../../modules/screen-time';
 import { GroupPickerModal } from '../../components/apps/GroupPickerModal';
+import { GroupEditorModal } from '../../components/settings/GroupEditorModal';
 
 export default function AppsScreen() {
   const store = useTimerStore();
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [selectedApp, setSelectedApp] = useState<InstalledApp | null>(null);
+  const [editorVisible, setEditorVisible] = useState(false);
+  const [appForNewGroup, setAppForNewGroup] = useState<InstalledApp | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -45,20 +48,27 @@ export default function AppsScreen() {
 
   const handleCreateGroupAndAssign = async (name: string) => {
     if (!selectedApp) return;
-    const newGroupId = await store.createAppGroup({
+    await store.createAppGroup({
       name,
       packages: [selectedApp.package],
       windowStartHour: 6,
-      windowEndHour: 24,
+      windowEndHour: 22,
       openingBalanceMinutes: 5,
       hourlyAccrualMinutes: 5,
       accrualIntervalHours: 1,
       budgetType: 'standard',
       compoundingBase: 300,
       compoundingCoefficient: 0,
-      emergencyBudgetMinutes: 0,
+      emergencyBudgetMinutes: 15,
     });
-    await store.addAppToGroup(selectedApp.package, newGroupId);
+  };
+
+  const handleSaveFromEditor = async (groupId: number | null, input: CreateGroupInput) => {
+    if (groupId === null) {
+      await store.createAppGroup(input);
+    } else {
+      await store.updateGroupSettings(groupId, input);
+    }
   };
 
   // Find current group for a package
@@ -169,7 +179,29 @@ export default function AppsScreen() {
           onSelectGroup={handleSelectGroup}
           onRemoveFromGroup={handleRemoveFromGroup}
           onCreateGroupAndAssign={handleCreateGroupAndAssign}
+          onCreateNewGroup={() => {
+            if (selectedApp) {
+              setAppForNewGroup(selectedApp);
+              setSelectedApp(null);
+              setEditorVisible(true);
+            }
+          }}
           onClose={() => setSelectedApp(null)}
+        />
+
+        {/* Unified Rich Group Editor Modal */}
+        <GroupEditorModal
+          visible={editorVisible}
+          group={null}
+          initialPackages={appForNewGroup ? [appForNewGroup.package] : []}
+          initialName={appForNewGroup ? appForNewGroup.name : ''}
+          installedApps={store.installedApps}
+          allGroups={store.appGroups}
+          onSave={handleSaveFromEditor}
+          onClose={() => {
+            setEditorVisible(false);
+            setAppForNewGroup(null);
+          }}
         />
       </View>
     </SafeAreaView>
