@@ -47,11 +47,6 @@ export default function SettingsScreen() {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.header}>
-            <Text style={styles.title}>Settings</Text>
-            <Text style={styles.subtitle}>Configure app group budgets and system permissions.</Text>
-          </View>
-
           {/* Multi-Group Budget & Schedule Management */}
           <GroupSettings />
 

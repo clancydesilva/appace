@@ -55,8 +55,10 @@ export function GroupEditorModal({
   const [appSearchQuery, setAppSearchQuery] = useState('');
   const [saving, setSaving] = useState(false);
 
-  // Initialize or reset form when group changes or modal opens
+  // Initialize or reset form only when modal becomes visible or group changes
   useEffect(() => {
+    if (!visible) return;
+
     if (group) {
       setName(group.name);
       setStartHourStr(String(group.windowStartHour));
@@ -85,11 +87,11 @@ export function GroupEditorModal({
       setCompoundingBaseMinsStr('5');
       setCompoundingCoeffStr('2.0');
       setEmergencyBudgetMinsStr('15');
-      setSelectedPackages(initialPackages || []);
+      setSelectedPackages(initialPackages ? [...initialPackages] : []);
     }
     setIsAddingApps(false);
     setAppSearchQuery('');
-  }, [group, visible, initialPackages, initialName]);
+  }, [group, visible]);
 
   const handleSelectStandard = () => {
     setBudgetType('standard');
