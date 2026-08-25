@@ -1,162 +1,105 @@
 # Appace — Architecture Overview
 
-> Last updated: 2026-08 (v0.7.0)  
+> Last updated: 2026-08 (v0.9.2)  
 > Package: `com.clancy.appace`  
-> Stack: TypeScript (React Native / Expo), Kotlin (native module), Room DB, WorkManager, Accessibility Service
+> Stack: TypeScript (React Native / Expo), Kotlin (native module), Room DB (v5), WorkManager, Accessibility Service, UsageStatsManager
 
 ---
 
 ## High-Level Architecture
 
 ```
-┌─────────────────────────────────────────────────┐
-│          React Native / Expo (TypeScript)        │
-│  ┌──────────────┐   ┌──────────────────────────┐ │
-│  │  Expo Router  │   │   Zustand (useTimerStore) │ │
-│  │  (screens)    │◄──│   Balance / Settings      │ │
-│  └──────────────┘   └──────────┬───────────────┘ │
-│                                │ JS Bridge        │
-└────────────────────────────────┼────────────────-┘
-                                 │
-┌────────────────────────────────▼───────────────-─┐
-│     ExpoScreenTimeModule (Kotlin, Expo Modules)   │
-│  Exposes async functions callable from JS:        │
-│  getBalance, getSettings, setSettings,            │
-│  getTelemetryLogs, checkUsageAccess, etc.         │
-└──────┬────────────────────────┬──────────────────┘
-       │                        │
-┌──────▼────────┐   ┌───────────▼──────────────────┐
-│ BalanceRepo   │   │  AppDatabase (Room)           │
-│ (Kotlin)      │   │  BalanceEntity (1 row)        │
-│  tick()       │   │  TelemetryEntity (log rows)   │
-│  deductIfIn.. │   │  ReconciliationEntity (cursor) │
-│  Mutex-guarded│   └──────────────────────────────┘
-└──────┬────────┘
+┌─────────────────────────────────────────────────────────────┐
+│              React Native / Expo (TypeScript)               │
+│  ┌───────────────────────────┐   ┌────────────────────────┐ │
+│  │ Expo Router Screens       │   │ Zustand (useTimerStore)│ │
+│  │ (Home, Apps, Settings,    │◄──│ Multi-Group State,     │ │
+│  │  Onboarding StepGroup)    │   │ Emergency Top-ups      │ │
+│  └───────────────────────────┘   └───────────┬────────────┘ │
+│                                              │ JS Bridge    │
+└──────────────────────────────────────────────┼──────────────┘
+                                               │
+┌──────────────────────────────────────────────▼──────────────┐
+│         ExpoScreenTimeModule (Kotlin, Expo Modules API)     │
+│  Exposes async functions: getAppGroups, createAppGroup,     │
+│  updateGroupSettings, deleteAppGroup, addAppToGroup,        │
+│  removeAppFromGroup, applyEmergencyTopUp, getTelemetryLogs  │
+└──────┬──────────────────────┬────────────────────────┬──────┘
+       │                      │                        │
+┌──────▼────────────────┐  ┌──▼─────────────────┐   ┌──▼──────────────────┐
+│ GroupBalanceRepo      │  │ Legacy BalanceRepo │   │ AppDatabase (Room)  │
+│ (Kotlin, Multi-Group) │  │ (Single-Balance)   │   │ • app_groups        │
+│  • tickGroup()        │  │  • tick()          │   │ • app_group_members │
+│  • deductFromGroup()  │  │  • deductIfIn..    │   │ • balance           │
+│  • applyEmergency..   │  │  • Mutex-guarded   │   │ • telemetry         │
+│  • Mutex-guarded      │  └────────────────────┘   │ • reconciliation    │
+└──────┬────────────────┘                           └─────────────────────┘
        │
-┌──────▼────────────────────────────────────────────┐
-│  Android OS & Background Services (Kotlin)         │
-│                                                    │
-│  ┌─────────────────────────────────────────────┐  │
-│  │ AppWatcherService (AccessibilityService)    │  │
-│  │  • TYPE_WINDOW_STATE_CHANGED events         │  │
-│  │  • runTrackingLoop (drain loop, 1s ticks)   │  │
-│  │  • Owns live tracking countdown notification│  │
-│  │  • launchGraceJob (5s grace on app-switch)  │  │
-│  │  • persistHeartbeat (GapReconciler baseline)│  │
-│  └─────────────────────────────────────────────┘  │
-│                                                    │
-│  ┌─────────────────────────────────────────────┐  │
-│  │ AccrualWorker (WorkManager, every 15 min)   │  │
-│  │  1. BalanceRepository.tick()                │  │
-│  │  2. GapReconciler.reconcile()               │  │
-│  └─────────────────────────────────────────────┘  │
-│                                                    │
-│  ┌─────────────────────────────────────────────┐  │
-│  │ BootReceiver & MainApplication              │  │
-│  │  • Seeds repository & schedules workers     │  │
-│  └─────────────────────────────────────────────┘  │
-└───────────────────────────────────────────────────┘
+┌──────▼──────────────────────────────────────────────────────┐
+│  Android OS & Background Services (Kotlin)                  │
+│                                                             │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │ AppWatcherService (AccessibilityService)              │  │
+│  │  • Scoped to TYPE_WINDOW_STATE_CHANGED                │  │
+│  │  • In-memory packageToGroupId cache & invalidation    │  │
+│  │  • runTrackingLoop (1s projection, 5s Room deduction) │  │
+│  │  • Owns live tracking status bar notification         │  │
+│  │  • enforceBlockAndRedirect (GLOBAL_ACTION_HOME + 3s)  │  │
+│  │  • Same-group seamless app-switching                  │  │
+│  │  • launchGraceJob (5s grace on app-switch/systemui)   │  │
+│  │  • persistHeartbeat (GapReconciler baseline)          │  │
+│  └───────────────────────────────────────────────────────┘  │
+│                                                             │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │ AccrualWorker (WorkManager, every 15 min)             │  │
+│  │  1. BalanceRepository.tick()                          │  │
+│  │  2. GapReconciler.reconcile()                         │  │
+│  │  3. GroupBalanceRepository.tick()                     │  │
+│  │  4. GapReconciler.reconcileGroups()                   │  │
+│  └───────────────────────────────────────────────────────┘  │
+│                                                             │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │ BootReceiver & MainApplication                        │  │
+│  │  • Seeds repositories, runs tick, schedules worker    │  │
+│  └───────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
 ## Key Data Flow: Screen Time Deduction
 
-1. User opens a tracked app → OS fires `TYPE_WINDOW_STATE_CHANGED`.
-2. `AppWatcherService.onAccessibilityEvent()` receives the event, identifies the package as tracked.
-3. `runTrackingLoop(pkg)` launches as a coroutine on `Dispatchers.IO`.
-4. Every **1 second**: the drain loop projects the balance locally and updates the status bar notification.
-5. Every **5 seconds**: a real `BalanceRepository.deductIfInWindow(elapsed)` call writes to Room.
-   - `persistHeartbeat()` is also written, so `GapReconciler` can detect any subsequent gap.
-6. When balance hits 0 or the user leaves: `launchAppaceDashboard()` / deduction committed.
+1. User opens a tracked app &rarr; OS fires `TYPE_WINDOW_STATE_CHANGED`.
+2. `AppWatcherService.onAccessibilityEvent()` identifies package via `isTrackedApp(pkg)` (`packageToGroupId` or SharedPreferences).
+3. If balance is 0s, `enforceBlockAndRedirect(pkg)` immediately kicks the user to Home without showing a notification.
+4. If balance is available, `runTrackingLoop(pkg, groupId)` launches on `Dispatchers.IO`.
+5. Every **1 second**: drain loop projects remaining seconds locally and updates live notification.
+6. Every **5 seconds**: a real `groupRepo.deductFromGroup(groupId, elapsed)` call writes to Room and updates `persistHeartbeat()`.
+7. When balance hits 0s: `enforceBlockAndRedirect(pkg)` executes `performGlobalAction(GLOBAL_ACTION_HOME)`, attempts `launchTimesUpScreen()`, and runs a 3-second bounded verification loop.
 
 ---
 
-## Key Data Flow: Hourly Accrual
+## Key Data Flow: Multi-Group Hourly Accrual
 
-1. `AccrualWorker` fires every 15 minutes via WorkManager (guaranteed, wake-lock held).
-2. `BalanceRepository.tick()`:
-   - Resets balance if the calendar date has changed.
-   - Grants the opening balance if the window just opened today.
-   - Grants hourly accrual for any hours that have passed since `lastAccrualHour`.
-3. `GapReconciler.reconcile()`: queries `UsageStatsManager` for any foreground usage since the last
-   heartbeat, deducts it in case `AppWatcherService` was dead during that window.
-
----
-
-## Key Data Flow: App Switch Grace Window
-
-When the user leaves a tracked app for the launcher or an untracked app:
-
-1. A `launchGraceJob` coroutine starts a 5-second timer.
-2. If the user returns to the tracked app within 5 seconds, the grace job is cancelled — no deduction.
-3. If the timer expires, `rootInActiveWindow` is checked:
-   - If the tracked app is still foreground (e.g. the event was a systemui shade pull-down): abort.
-   - Otherwise: wipe `currentTrackedApp`, cancel `activeTrackingJob`, deduct elapsed time.
-
-This prevents false deductions from notification shade swipes and brief OS overlays.
+1. `AccrualWorker` fires every 15 minutes via WorkManager.
+2. `GroupBalanceRepository.tick()` runs inside `mutex.withLock`:
+   - **Step 1**: Midnight reset wipes balance and resets flags if calendar date changed.
+   - **Step 2**: Outside window (`now < windowStartHour` or `now >= windowEndHour`) skips grants.
+   - **Step 3**: Window open grants `openingBalanceSeconds` and Option B start-hour accrual, resets `emergencyUsedSeconds = 0`.
+   - **Step 4**: Catch-up loop calculates linear or compounding accrual for missed hours.
+3. `GapReconciler.reconcileGroups()` queries `UsageStatsManager` for unmonitored crash gaps and attributes deductions to owning groups.
 
 ---
 
-## Room Database Schema
+## Room Database Schema (Room DB v5)
 
-| Entity | Purpose | Rows |
+| Entity / Table | Purpose | Rows |
 |---|---|---|
-| `BalanceEntity` | Single-row config + live balance | Always exactly 1 |
-| `TelemetryEntity` | Append-only diagnostic log | Grows indefinitely |
-| `ReconciliationEntity` | Reconciliation cursor (lastReconciledMs) | Always exactly 1 |
-
----
-
-## File Map
-
-```
-app/                       Expo Router screens
-  (tabs)/index.tsx         Main balance screen (drain + refetch loops)
-  (tabs)/apps.tsx          Tracked apps drawer & configuration
-  (tabs)/settings.tsx      Settings screen & permissions management
-  onboarding.tsx           7-step onboarding flow
-  privacy.tsx              Privacy policy screen
-
-components/
-  onboarding/              Onboarding step components (Steps 1 to 7)
-  settings/                Settings screen components (PermissionsStatus, etc.)
-  AccessibilityDisclosure.tsx       Prominent disclosure for Accessibility
-  AccessibilityDisclosureModal.tsx  Modal wrapper for Accessibility disclosure
-  UsageAccessDisclosure.tsx         Prominent disclosure for Usage Access
-  UsageAccessDisclosureModal.tsx    Modal wrapper for Usage Access disclosure
-  ErrorBoundary.tsx        Top-level React error boundary
-
-store/
-  useTimerStore.ts         Zustand store — JS-side state for balance, settings, permissions
-
-utils/
-  budget.ts                calculateMaxDailyMinutes() — pure function
-  formatTime.ts            Hour label formatting utilities
-
-modules/screen-time/       Expo native module
-  src/
-    ExpoScreenTimeModule.ts    JS-side module entry (exports typed functions)
-    ExpoScreenTime.types.ts    Shared TypeScript interfaces (JSDoc annotated)
-  android/src/main/java/com/clancy/appace/
-    ExpoScreenTimeModule.kt    Native async function implementations (JS bridge)
-    AppWatcherService.kt       Accessibility service (real-time tracking & live notification)
-    AccrualWorker.kt           WorkManager periodic worker
-    BootReceiver.kt            Boot-completed receiver
-    BalanceRepository.kt       Core business logic (tick, deduct, settings)
-    GapReconciler.kt           Crash-recovery gap attribution
-    TelemetryLogger.kt         Local diagnostic logging
-    AppDatabase.kt             Room database definition
-    BalanceEntity.kt           Room entity: balance + config
-    TelemetryEntity.kt         Room entity: diagnostic log rows
-    ReconciliationEntity.kt    Room entity: gap-reconciliation cursor
-
-adr/                       Architecture Decision Records
-  001-accessibility-service-reliability.md
-  002-daily-reset-timing.md
-  003-accrual-formula-choice.md
-  004-onboarding-zero-groups.md
-```
+| `app_groups` (`AppGroupEntity`) | Group-level budget configurations, schedules, and balances | 1 or more |
+| `app_group_members` (`AppGroupMemberEntity`) | Package to Group mappings (1 app $\rightarrow$ at most 1 group) | Dynamic |
+| `balance` (`BalanceEntity`) | Legacy single-row config + live balance | Exactly 1 |
+| `telemetry` (`TelemetryEntity`) | Append-only diagnostic log | Grows indefinitely |
+| `reconciliation` (`ReconciliationEntity`) | Gap-reconciliation cursor (`lastReconciledMs`) | Exactly 1 |
 
 ---
 
@@ -165,20 +108,8 @@ adr/                       Architecture Decision Records
 | Rule | Where enforced |
 |---|---|
 | All Room access on `Dispatchers.IO` | `withContext(Dispatchers.IO)` in every repository method |
-| No TOCTOU on window-check + deduct | `deductIfInWindow()` acquires `Mutex` before both operations |
+| Single-Writer Mutex Serialization | Companion `Mutex` in `GroupBalanceRepository` and `BalanceRepository` |
 | `tick()` is idempotent | `lastAccrualHour`, `windowOpenGrantedToday`, `lastResetDate` guards |
 | WorkManager uniqueness | `enqueueUniquePeriodicWork` with `KEEP` policy in `AccrualWorker` |
-| No notifications for hourly accruals | Accrual is always silent — only live tracking shows a notification |
-| No `QUERY_ALL_PACKAGES` | `<queries>` intent filter used instead for launcher app list |
 | Zero Foreground Service permissions | Android OS binds to AccessibilityService directly; eliminates FGS policy risk |
-
----
-
-## Known Risks
-
-| Risk | Status | Mitigation |
-|---|---|---|
-| AccessibilityService policy compliance | Managed | Prominent disclosures in place; declaration form + video required |
-| Android 17 Advanced Protection Mode | Future risk | UsageStatsManager fallback path planned |
-| OEM process killing (Samsung, Xiaomi) | Mitigated | OS-managed Accessibility Service + GapReconciler recovery |
-| UsageStats 5-min recency blackout | Accepted | GapReconciler truncates window by TRUNCATION_SAFETY_MS |
+| No `QUERY_ALL_PACKAGES` | `<queries>` intent filter used instead for launcher app list |
