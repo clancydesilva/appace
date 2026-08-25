@@ -2,8 +2,8 @@
 
 > **Package**: `com.clancy.appace`  
 > **Stack**: React Native (TypeScript) + Expo SDK 54 + Kotlin Native Module (`screen-time`) + Room DB (v5) + Accessibility Service + UsageStatsManager + WorkManager  
-> **Current Version**: `0.9.2` (versionCode `92`)  
-> **Active Development Branch**: `fix/phase8-app-groups` (HEAD: `378809e`)  
+> **Current Version**: `0.9.3` (versionCode `93`)  
+> **Active Development Branch**: `fix/phase8-app-groups` (HEAD: `d8ff7ea`)  
 > **Target Device / OS**: Samsung Galaxy S24 (`R3CX908LHVM`) / Android 14+ (API 34)  
 
 ---
@@ -64,24 +64,24 @@ Appace is an Android screen time management application built on positive reinfo
 * **Single-Writer Serialization**:
   * Companion `private val mutex = Mutex()` guarantees all `tick()`, `deductFromGroup()`, and `applyEmergencyTopUp()` operations are strictly serialized.
 * **Daily Lifecycle Sequence (`tickGroup`)**:
-  * **Step 1 (Midnight Reset)**: On date change (`todayStr != g.lastResetDate`), resets `balanceSeconds = 0`, `windowOpenGrantedToday = false`, `lastAccrualHour = -1`. Preserves `emergencyUsedSeconds` past midnight until window open (KI-012).
+  * **Step 1 (Midnight Reset)**: On date change (`todayStr != g.lastResetDate`), resets `balanceSeconds = 0`, `windowOpenGrantedToday = false`, `lastAccrualHour = -1`, `compoundingStreak = 0`. Preserves `emergencyUsedSeconds` past midnight until window open (KI-012).
   * **Step 2 (Outside Window)**: If `currentHour < windowStartHour` or `currentHour >= windowEndHour`, returns immediately without granting accruals.
-  * **Step 3 (Window Start / Opening Grant)**: When passing `windowStartHour`, grants `openingBalanceSeconds` and start-hour accrual (Option B), resets `emergencyUsedSeconds = 0`, and sets `windowOpenGrantedToday = true`.
+  * **Step 3 (Window Start / Opening Grant)**: When passing `windowStartHour`, grants `openingBalanceSeconds` and start-hour accrual (Option B), resets `emergencyUsedSeconds = 0`, `compoundingStreak = 0`, and sets `windowOpenGrantedToday = true`.
   * **Step 4 (Hourly Accrual Catch-Up)**: For each elapsed hour interval, computes:
     - **Linear (Standard)**: Flat `hourlyAccrualSeconds` every `accrualIntervalHours`.
-    - **Compounding**: $\text{accrualMinutes} = \frac{\text{compoundingBase}}{60.0} + \text{streak} \times \text{compoundingCoefficient}$.
+    - **Compounding**: $\text{accrualMinutes} = \frac{\text{compoundingBase}}{60.0} + \text{compoundingStreak} \times \text{compoundingCoefficient}$. Increments `compoundingStreak += 1` with each idle drop.
   * **Step 5 (Window Closed)**: Beyond `windowEndHour`, balance drops to 0s.
 * **Emergency Reserve Top-Up (`applyEmergencyTopUp`)**:
   * Mutex-guarded atomic draw. Clamps grant to `emergencyBudgetSeconds - emergencyUsedSeconds`, adds to `balanceSeconds`, and increments `emergencyUsedSeconds`.
 * **Group Deductions (`deductFromGroup`)**:
-  * Mutex-guarded deduction from `balanceSeconds`, clamped at `0s`.
+  * Mutex-guarded deduction from `balanceSeconds`, clamped at `0s`. If `seconds > 0`, resets `compoundingStreak = 0` (delayed gratification mechanic).
 
 ---
 
 ### C. Expo Native Bridge (`ExpoScreenTimeModule.kt`)
 * **Location**: `modules/screen-time/android/src/main/java/expo/modules/screentime/ExpoScreenTimeModule.kt`
 * **Exposed APIs**:
-  * `getAppGroups`: Returns array of `AppGroup` objects with live balances, configs, and memberships.
+  * `getAppGroups`: Returns array of `AppGroup` objects with live balances, configs, memberships, and `compoundingStreak`.
   * `createAppGroup`: Inserts group, inserts member package rows, syncs prefs, invalidates cache, and calls `groupRepo.tick()`.
   * `updateGroupSettings`: Updates group config, refreshes members, syncs prefs, invalidates cache, and calls `groupRepo.tick()`.
   * `deleteAppGroup`: Deletes group (foreign key cascade removes members), syncs prefs, and invalidates cache.
@@ -112,15 +112,15 @@ Appace is an Android screen time management application built on positive reinfo
   * `app/(tabs)/index.tsx`: Multi-group Home Screen with `GroupCard` components, live countdowns, linear vs compounding badges, and instant `+2m`/`+5m`/`+10m` emergency chips.
   * `app/(tabs)/apps.tsx`: Tracked apps drawer.
   * `app/(tabs)/settings.tsx`: Group management via `GroupSettings.tsx` and `GroupEditorModal.tsx`.
-  * `utils/budget.ts`: Option B mathematical calculations starting loops at `hr = start`. Clean typography with emojis stripped across all UI components (KI-009).
+  * `utils/budget.ts`: Option B mathematical calculations starting loops at `hr = start`, dynamic next-drop computation from `compoundingStreak`. Clean typography with emojis stripped across all UI components (KI-009).
 
 ---
 
-## 3. Database Schema (Room DB v5)
+## 3. Database Schema (Room DB v6)
 
 | Entity / Table | Primary Key | Description |
 | :--- | :--- | :--- |
-| `app_groups` (`AppGroupEntity`) | `id: Int (auto)` | Group configuration: `name`, `ordinal`, `balanceSeconds`, `windowStartHour`, `windowEndHour`, `openingBalanceSeconds`, `hourlyAccrualSeconds`, `accrualIntervalHours`, `lastAccrualHour`, `lastResetDate`, `windowOpenGrantedToday`, `budgetType` (`standard`/`compounding`), `compoundingBase`, `compoundingCoefficient`, `emergencyBudgetSeconds`, `emergencyUsedSeconds`. |
+| `app_groups` (`AppGroupEntity`) | `id: Int (auto)` | Group configuration: `name`, `ordinal`, `balanceSeconds`, `windowStartHour`, `windowEndHour`, `openingBalanceSeconds`, `hourlyAccrualSeconds`, `accrualIntervalHours`, `lastAccrualHour`, `lastResetDate`, `windowOpenGrantedToday`, `budgetType` (`standard`/`compounding`), `compoundingBase`, `compoundingCoefficient`, `compoundingStreak`, `emergencyBudgetSeconds`, `emergencyUsedSeconds`. |
 | `app_group_members` (`AppGroupMemberEntity`) | `(groupId, packageName)` | Foreign key `groupId -> app_groups(id) ON DELETE CASCADE`. Enforces 1-app-1-group invariant. |
 | `balance` (`BalanceEntity`) | `id: Int = 1` | Legacy single-balance singleton row. |
 | `telemetry` (`TelemetryEntity`) | `id: Long (auto)` | Audit log storing `timestampMs`, `eventType`, `details`. |
@@ -131,6 +131,7 @@ Appace is an Android screen time management application built on positive reinfo
 * `Migration(2, 3)`: Added `telemetry` table.
 * `Migration(3, 4)`: Added `reconciliation_state` table for `GapReconciler`.
 * `Migration(4, 5)`: Added `app_groups` and `app_group_members` tables and seeded default "General" group.
+* `Migration(5, 6)`: Added `compoundingStreak INTEGER NOT NULL DEFAULT 0` to `app_groups` table.
 
 ---
 

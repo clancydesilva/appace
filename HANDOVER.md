@@ -1,9 +1,9 @@
 # Appace — Comprehensive Codebase Context & Project Handover
 
 > **Package**: `com.clancy.appace`  
-> **Stack**: React Native + Expo SDK 54 + Kotlin Native Module (`screen-time`) + Room DB (v5) + Accessibility Service + UsageStatsManager + WorkManager  
-> **Current Version**: `0.9.2` (versionCode `92`)  
-> **Active Branch**: `fix/phase8-app-groups` (HEAD: `378809e`)  
+> **Stack**: React Native + Expo SDK 54 + Kotlin Native Module (`screen-time`) + Room DB (v6) + Accessibility Service + UsageStatsManager + WorkManager  
+> **Current Version**: `0.9.3` (versionCode `93`)  
+> **Active Branch**: `fix/phase8-app-groups`  
 > **Target Device**: Samsung Galaxy S24 (`R3CX908LHVM`) / Android 14+ (API 34)  
 
 ---
@@ -23,6 +23,7 @@ If you are an incoming AI agent starting a new turn or conversation, **read this
 6. **No Speculative Modifications**: If asked "why", "what", or "can you check", explain and present options first — do not edit files or run git commits without explicit instructions.
 
 ### Essential Document Map
+- [`context.md`](file:///c:/Users/clanc/Desktop/College/appace/context.md): Comprehensive all-in-one master context document.
 - [`GEMINI.md`](file:///c:/Users/clanc/Desktop/College/appace/GEMINI.md) / [`CLAUDE.md`](file:///c:/Users/clanc/Desktop/College/appace/CLAUDE.md): Agent rules, git strategy, hygiene, permission policies.
 - [`fixed-issues.md`](file:///c:/Users/clanc/Desktop/College/appace/fixed-issues.md): Historical log of all resolved issues (KI-002, KI-009..KI-014).
 - [`known-issues.md`](file:///c:/Users/clanc/Desktop/College/appace/known-issues.md): Active and latent architectural issues (KI-001, KI-003..KI-008).

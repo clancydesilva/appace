@@ -4,6 +4,26 @@ Use this file to log every test run, errors encountered, changes made, and verif
 
 ---
 
+## [2026-08-25 16:36] Compounding Streak Progression & Reset Engine (Appace 0.9.3)
+
+* **Branch**: `fix/phase8-app-groups`
+* **Test Goal**: Verify dynamic delayed gratification compounding streak increment on idle accrual drops ($5\text{m} \rightarrow 7\text{m} \rightarrow 9\text{m}$), streak reset on `deductFromGroup(seconds > 0)`, streak preservation on `deductFromGroup(seconds == 0)`, midnight rollover reset, and multi-hour offline catch-up.
+* **Commands**:
+  * `./gradlew :screen-time:test` (JVM Robolectric suite)
+  * `npx tsc --noEmit` (TypeScript type check)
+  * `./gradlew assembleRelease` (Release APK packaging)
+
+### ✅ Final Result — BUILD SUCCESSFUL
+* **Robolectric JVM Tests**: 36 total tests passed, 0 failures, 0 errors.
+* **TypeScript Type Check**: 0 type errors.
+* **Release Artifact**: `apks/appace-0.9.3.apk` (48 MB, versionCode 93).
+* **Changes Committed**:
+  1. `[docs] add comprehensive context.md master doc and update ARCHITECTURE.md to v0.9.2`
+  2. `[fix] implement compounding streak progression and deductFromGroup delayed gratification reset`
+  3. `[release] bump version to 0.9.3 (versionCode 93)`
+
+---
+
 ## [2026-08-19 21:40] Phase 8.1 — Multi-Group Native Engine (Robolectric)
 
 * **Branch**: `phase8/group-engine` (merged to `main`)
