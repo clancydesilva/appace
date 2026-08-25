@@ -62,6 +62,7 @@ export interface AppGroup {
   budgetType: 'standard' | 'compounding' | 'custom';
   compoundingBase: number;        // seconds
   compoundingCoefficient: number; // float
+  compoundingStreak: number;      // active non-use streak (hours)
   emergencyBudgetSeconds: number;
   emergencyUsedSeconds: number;
   emergencyRemainingSeconds: number;

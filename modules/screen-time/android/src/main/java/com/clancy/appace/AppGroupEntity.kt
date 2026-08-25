@@ -43,6 +43,7 @@ data class AppGroupEntity(
     val budgetType: String = "standard",     // "standard" | "compounding"
     val compoundingBase: Long = 300,         // first-hour accrual (seconds)
     val compoundingCoefficient: Float = 0f,  // extra seconds per additional hour (d)
+    val compoundingStreak: Int = 0,          // consecutive idle non-use hours
 
     // Emergency reserve pool
     val emergencyBudgetSeconds: Long = 0,    // configured cap (0 = disabled)

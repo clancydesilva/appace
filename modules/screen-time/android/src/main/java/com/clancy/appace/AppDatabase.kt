@@ -88,6 +88,17 @@ private val MIGRATION_4_5 = object : Migration(4, 5) {
     }
 }
 
+// Migration 5 → 6: Add compoundingStreak to app_groups for dynamic delayed-gratification streaks.
+private val MIGRATION_5_6 = object : Migration(5, 6) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            ALTER TABLE app_groups ADD COLUMN compoundingStreak INTEGER NOT NULL DEFAULT 0
+            """.trimIndent()
+        )
+    }
+}
+
 @Database(
     entities = [
         BalanceEntity::class,
@@ -96,7 +107,7 @@ private val MIGRATION_4_5 = object : Migration(4, 5) {
         AppGroupEntity::class,
         AppGroupMemberEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -116,7 +127,7 @@ abstract class AppDatabase : RoomDatabase() {
                     "appace_db"
                 )
                     .fallbackToDestructiveMigrationFrom(1, 2)
-                    .addMigrations(MIGRATION_3_4, MIGRATION_4_5)
+                    .addMigrations(MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                     .build().also { INSTANCE = it }
             }
 

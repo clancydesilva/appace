@@ -86,7 +86,8 @@ class GroupBalanceRepository(private val context: Context) {
                 balanceSeconds = 0,
                 lastResetDate = todayStr,
                 windowOpenGrantedToday = false,
-                lastAccrualHour = -1
+                lastAccrualHour = -1,
+                compoundingStreak = 0
             )
             dao.updateGroup(g)
         }
@@ -103,19 +104,21 @@ class GroupBalanceRepository(private val context: Context) {
                 // Prime lastAccrualHour so the catch-up loop starts at windowStartHour,
                 // matching the single-group BalanceRepository.tick() convention.
                 lastAccrualHour = g.windowStartHour - 1,
-                emergencyUsedSeconds = 0
+                emergencyUsedSeconds = 0,
+                compoundingStreak = 0
             )
             dao.updateGroup(g)
             TelemetryLogger.log(
                 context,
                 "TICK",
-                "Group '${g.name}' opening grant: ${g.openingBalanceSeconds / 60}m, emergency pool reset. Balance: ${g.balanceSeconds}s"
+                "Group '${g.name}' opening grant: ${g.openingBalanceSeconds / 60}m, emergency pool & streak reset. Balance: ${g.balanceSeconds}s"
             )
         }
 
         // Step 4: hourly accrual catch-up — loop over every hour we may have missed.
         if (currentHour > g.lastAccrualHour) {
             var updatedBalance = g.balanceSeconds
+            var updatedStreak = g.compoundingStreak
             var accrualsCount = 0
 
             for (hr in (g.lastAccrualHour + 1)..currentHour) {
@@ -123,22 +126,27 @@ class GroupBalanceRepository(private val context: Context) {
                 val hoursSinceStart = hr - g.windowStartHour
                 if (hoursSinceStart < 0) continue
 
-                val accrualSeconds = computeAccrual(g, hoursSinceStart)
+                val (accrualSeconds, nextStreak) = computeAccrual(g, hoursSinceStart, updatedStreak)
                 if (accrualSeconds > 0) {
                     updatedBalance += accrualSeconds
+                    updatedStreak = nextStreak
                     accrualsCount++
                 }
             }
 
             val targetLastAccrual = minOf(currentHour, g.windowEndHour - 1)
             if (targetLastAccrual > g.lastAccrualHour) {
-                g = g.copy(balanceSeconds = updatedBalance, lastAccrualHour = targetLastAccrual)
+                g = g.copy(
+                    balanceSeconds = updatedBalance,
+                    compoundingStreak = updatedStreak,
+                    lastAccrualHour = targetLastAccrual
+                )
                 dao.updateGroup(g)
                 if (accrualsCount > 0) {
                     TelemetryLogger.log(
                         context,
                         "TICK",
-                        "Group '${g.name}' accrual (${accrualsCount}x). Balance: ${g.balanceSeconds}s"
+                        "Group '${g.name}' accrual (${accrualsCount}x, streak=$updatedStreak). Balance: ${g.balanceSeconds}s"
                     )
                 }
             }
@@ -146,28 +154,31 @@ class GroupBalanceRepository(private val context: Context) {
     }
 
     /**
-     * Computes the accrual amount in seconds for a given hour within the group's window.
+     * Computes the accrual amount in seconds and next streak step for a given hour within the group's window.
      *
      * @param group  The group whose formula parameters are used.
      * @param hoursSinceStart  How many hours past [AppGroupEntity.windowStartHour] this hour is (0-based).
-     * @return Seconds to add for this hour, or 0 if the interval condition is not met (standard only).
+     * @param currentStreak  The active consecutive idle non-use streak count.
+     * @return Pair of (accrualSeconds, nextStreak).
      */
-    private fun computeAccrual(group: AppGroupEntity, hoursSinceStart: Int): Long {
+    private fun computeAccrual(group: AppGroupEntity, hoursSinceStart: Int, currentStreak: Int): Pair<Long, Int> {
         return when (group.budgetType) {
             "compounding" -> {
-                // Arithmetic series: accrualMinutes = (base / 60) + hoursSinceStart * coefficient
+                // Arithmetic streak series: accrualMinutes = (base / 60) + currentStreak * coefficient
                 // Ceiling to avoid under-granting due to float truncation.
                 val accrualMinutes = (group.compoundingBase / 60.0) +
-                    hoursSinceStart * group.compoundingCoefficient
-                ceil(accrualMinutes * 60.0).toLong()
+                    currentStreak * group.compoundingCoefficient
+                val seconds = ceil(accrualMinutes * 60.0).toLong()
+                Pair(seconds, currentStreak + 1)
             }
             else -> {
                 // Standard: flat drop every accrualIntervalHours.
-                if (hoursSinceStart % group.accrualIntervalHours == 0) {
+                val seconds = if (hoursSinceStart % group.accrualIntervalHours == 0) {
                     group.hourlyAccrualSeconds
                 } else {
                     0L
                 }
+                Pair(seconds, currentStreak)
             }
         }
     }
@@ -177,6 +188,7 @@ class GroupBalanceRepository(private val context: Context) {
     /**
      * Deducts [seconds] from [groupId]'s balance, floored at 0.
      * Only deducts if the current time falls within the group's earning window.
+     * If [seconds] > 0, resets [AppGroupEntity.compoundingStreak] to 0 (delayed gratification reset).
      * No-op if the group does not exist.
      *
      * @param groupId  The ID of the group to deduct from.
@@ -187,7 +199,13 @@ class GroupBalanceRepository(private val context: Context) {
             val g = dao.getGroupById(groupId) ?: return@withLock
             val hour = now().hour
             if (hour >= g.windowStartHour && hour < g.windowEndHour) {
-                dao.updateGroup(g.copy(balanceSeconds = maxOf(0L, g.balanceSeconds - seconds)))
+                val newStreak = if (seconds > 0L) 0 else g.compoundingStreak
+                dao.updateGroup(
+                    g.copy(
+                        balanceSeconds = maxOf(0L, g.balanceSeconds - seconds),
+                        compoundingStreak = newStreak
+                    )
+                )
             }
         }
     }

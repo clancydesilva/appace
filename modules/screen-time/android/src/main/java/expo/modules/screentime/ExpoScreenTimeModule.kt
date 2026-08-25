@@ -337,6 +337,7 @@ class ExpoScreenTimeModule : Module() {
                             "budgetType"                to g.budgetType,
                             "compoundingBase"           to g.compoundingBase,
                             "compoundingCoefficient"    to g.compoundingCoefficient,
+                            "compoundingStreak"         to g.compoundingStreak,
                             "emergencyBudgetSeconds"    to g.emergencyBudgetSeconds,
                             "emergencyUsedSeconds"      to g.emergencyUsedSeconds,
                             "emergencyRemainingSeconds" to maxOf(0L, g.emergencyBudgetSeconds - g.emergencyUsedSeconds),

@@ -166,41 +166,115 @@ class GroupBalanceRepositoryTest {
         assertEquals(after7 + 300L, after8)
     }
 
-    // --- Compounding accrual ---
+    // --- Compounding accrual & streak lifecycle ---
 
     @Test
-    fun `compounding accrual uses arithmetic formula`() = runBlocking {
-        // base=300s (5min), coefficient=60 means each hour adds 1 extra minute
-        val id = insertGroup(budgetType = "compounding", compoundingBase = 300L, compoundingCoefficient = 60f)
+    fun `compounding accrual increments streak over consecutive idle hours`() = runBlocking {
+        // Base = 300s (5min), coefficient = 2f (2 min per streak step)
+        val id = insertGroup(budgetType = "compounding", compoundingBase = 300L, compoundingCoefficient = 2f)
         GroupBalanceRepository.testDateTime = at(6)
         repo.tick()
 
-        // Hour 0 (6am): ceil((300/60 + 0*60)*60) = ceil(5.0*60) = 300s
-        // Opening balance: 300s
-        // Total after tick at 6am: 300 (opening) + 300 (hour0 compounding) = 600s
-        assertEquals(600L, db.appGroupDao().getGroupById(id)!!.balanceSeconds)
+        // 6am: opening (300s) + hour 0 drop (300 + 0*2*60 = 300s) = 600s
+        val after6 = db.appGroupDao().getGroupById(id)!!
+        assertEquals(600L, after6.balanceSeconds)
+        assertEquals(1, after6.compoundingStreak)
 
+        // 7am: streak 1 -> drop 300 + 1*2*60 = 420s (7m) -> total 600 + 420 = 1020s
         GroupBalanceRepository.testDateTime = at(7)
         repo.tick()
-        // Hour 1 (7am): ceil((300/60 + 1*60)*60) = ceil((5 + 60)*60) = ceil(65*60) = 3900s
-        val after7 = db.appGroupDao().getGroupById(id)!!.balanceSeconds
-        assertEquals(600L + 3900L, after7)
+        val after7 = db.appGroupDao().getGroupById(id)!!
+        assertEquals(1020L, after7.balanceSeconds)
+        assertEquals(2, after7.compoundingStreak)
+
+        // 8am: streak 2 -> drop 300 + 2*2*60 = 540s (9m) -> total 1020 + 540 = 1560s
+        GroupBalanceRepository.testDateTime = at(8)
+        repo.tick()
+        val after8 = db.appGroupDao().getGroupById(id)!!
+        assertEquals(1560L, after8.balanceSeconds)
+        assertEquals(3, after8.compoundingStreak)
+    }
+
+    @Test
+    fun `deductFromGroup with seconds greater than 0 resets compoundingStreak to 0 and subsequent drop returns to base`() = runBlocking {
+        val id = insertGroup(budgetType = "compounding", compoundingBase = 300L, compoundingCoefficient = 2f)
+        GroupBalanceRepository.testDateTime = at(6)
+        repo.tick()
+        GroupBalanceRepository.testDateTime = at(7)
+        repo.tick()
+
+        // At 7am, streak is 2, balance is 1020s
+        assertEquals(2, db.appGroupDao().getGroupById(id)!!.compoundingStreak)
+
+        // User spends 60s at 7:15am -> resets compoundingStreak to 0
+        GroupBalanceRepository.testDateTime = at(7, 15)
+        repo.deductFromGroup(id, 60L)
+
+        val afterDeduct = db.appGroupDao().getGroupById(id)!!
+        assertEquals(960L, afterDeduct.balanceSeconds)
+        assertEquals(0, afterDeduct.compoundingStreak)
+
+        // 8am tick -> streak was 0, so drop returns to Base (300s / 5m), streak becomes 1
+        GroupBalanceRepository.testDateTime = at(8)
+        repo.tick()
+
+        val after8 = db.appGroupDao().getGroupById(id)!!
+        assertEquals(960L + 300L, after8.balanceSeconds)
+        assertEquals(1, after8.compoundingStreak)
+    }
+
+    @Test
+    fun `deductFromGroup with 0 seconds preserves compoundingStreak`() = runBlocking {
+        val id = insertGroup(budgetType = "compounding", compoundingBase = 300L, compoundingCoefficient = 2f)
+        GroupBalanceRepository.testDateTime = at(6)
+        repo.tick()
+        GroupBalanceRepository.testDateTime = at(7)
+        repo.tick()
+
+        assertEquals(2, db.appGroupDao().getGroupById(id)!!.compoundingStreak)
+
+        // 0s deduction (e.g. grace period restored/cancelled)
+        repo.deductFromGroup(id, 0L)
+        assertEquals(2, db.appGroupDao().getGroupById(id)!!.compoundingStreak)
+    }
+
+    @Test
+    fun `multi-hour offline catchup advances streak sequentially across missed hours`() = runBlocking {
+        val id = insertGroup(budgetType = "compounding", compoundingBase = 300L, compoundingCoefficient = 2f)
+        GroupBalanceRepository.testDateTime = at(6)
+        repo.tick()
+
+        // Balance after 6am: 600s, streak: 1
+        assertEquals(600L, db.appGroupDao().getGroupById(id)!!.balanceSeconds)
+        assertEquals(1, db.appGroupDao().getGroupById(id)!!.compoundingStreak)
+
+        // Device offline until 9am -> tick processes hours 7 (streak 1: 420s), 8 (streak 2: 540s), 9 (streak 3: 660s)
+        // Total catchup: 420 + 540 + 660 = 1620s
+        GroupBalanceRepository.testDateTime = at(9)
+        repo.tick()
+
+        val after9 = db.appGroupDao().getGroupById(id)!!
+        assertEquals(600L + 1620L, after9.balanceSeconds)
+        assertEquals(4, after9.compoundingStreak)
     }
 
     // --- Midnight reset ---
 
     @Test
-    fun `midnight reset wipes balance and flags`() = runBlocking {
-        val id = insertGroup(emergencyBudgetSeconds = 600L)
+    fun `midnight reset wipes balance, flags, and compoundingStreak`() = runBlocking {
+        val id = insertGroup(budgetType = "compounding", compoundingBase = 300L, compoundingCoefficient = 2f, emergencyBudgetSeconds = 600L)
         GroupBalanceRepository.testDateTime = at(6)
         repo.tick()
+        GroupBalanceRepository.testDateTime = at(7)
+        repo.tick()
 
-        // Manually set balance
+        // Manually set balance and verify streak
         db.appGroupDao().updateGroup(
             db.appGroupDao().getGroupById(id)!!.copy(
                 balanceSeconds = 1000L
             )
         )
+        assertEquals(2, db.appGroupDao().getGroupById(id)!!.compoundingStreak)
 
         // Advance to next day outside window (00:05)
         GroupBalanceRepository.testDateTime = LocalDateTime.of(TEST_DAY.plusDays(1), LocalTime.of(0, 5))
@@ -210,6 +284,7 @@ class GroupBalanceRepositoryTest {
         assertEquals(0L, g.balanceSeconds)
         assertFalse(g.windowOpenGrantedToday)
         assertEquals(-1, g.lastAccrualHour)
+        assertEquals(0, g.compoundingStreak)
         assertEquals(TEST_DAY.plusDays(1).toString(), g.lastResetDate)
     }
 

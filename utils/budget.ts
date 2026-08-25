@@ -68,11 +68,10 @@ export function calculateGroupNextDrop(
     let nextDropMinutes = group.hourlyAccrualMinutes;
 
     if (group.budgetType === 'compounding') {
-        const nextHour = currentHour + 1;
-        const hourIndex = Math.max(0, nextHour - group.windowStartHour);
         const baseMins = group.compoundingBase / 60.0;
         const d = group.compoundingCoefficient;
-        nextDropMinutes = Math.ceil(baseMins + (hourIndex * d));
+        const streak = group.compoundingStreak ?? 0;
+        nextDropMinutes = Math.ceil(baseMins + (streak * d));
     }
 
     return {
