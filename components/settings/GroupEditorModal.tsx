@@ -9,6 +9,8 @@ import {
   TextInput,
   Alert,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { AppGroup, CreateGroupInput, InstalledApp } from '../../modules/screen-time';
 import { formatHourLabel } from '../../utils/formatTime';
@@ -247,9 +249,13 @@ export function GroupEditorModal({
       visible={visible}
       animationType="slide"
       transparent
+      statusBarTranslucent
       onRequestClose={onClose}
     >
-      <View style={styles.overlay}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.overlay}
+      >
         <View style={styles.sheetContainer}>
           {/* Header */}
           <View style={styles.header}>
@@ -271,6 +277,7 @@ export function GroupEditorModal({
               style={styles.scrollArea}
               contentContainerStyle={styles.scrollContent}
               keyboardShouldPersistTaps="handled"
+              automaticallyAdjustKeyboardInsets={true}
             >
               {/* Group Name */}
               <View style={styles.fieldSection}>
@@ -712,7 +719,7 @@ export function GroupEditorModal({
             </ScrollView>
           )}
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -729,8 +736,8 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 20,
     borderWidth: 1,
     borderColor: '#242424',
-    maxHeight: '90%',
-    paddingBottom: 20,
+    maxHeight: '92%',
+    paddingBottom: 16,
   },
   header: {
     flexDirection: 'row',
@@ -764,12 +771,12 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   scrollArea: {
-    maxHeight: 520,
+    flexShrink: 1,
   },
   scrollContent: {
     paddingHorizontal: 20,
     paddingTop: 16,
-    paddingBottom: 30,
+    paddingBottom: 48,
   },
   fieldSection: {
     marginBottom: 20,

@@ -8,6 +8,8 @@ import {
   ScrollView,
   TextInput,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { AppGroup, InstalledApp } from '../../modules/screen-time';
 
@@ -79,9 +81,13 @@ export function GroupPickerModal({
       visible={visible}
       transparent
       animationType="slide"
+      statusBarTranslucent
       onRequestClose={onClose}
     >
-      <View style={styles.overlay}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.overlay}
+      >
         <TouchableOpacity
           style={styles.backdrop}
           activeOpacity={1}
@@ -114,6 +120,7 @@ export function GroupPickerModal({
               style={styles.scrollArea}
               contentContainerStyle={styles.scrollContent}
               keyboardShouldPersistTaps="handled"
+              automaticallyAdjustKeyboardInsets={true}
             >
               {/* Existing Groups List */}
               <Text style={styles.sectionTitle}>SELECT APP GROUP</Text>
@@ -226,7 +233,7 @@ export function GroupPickerModal({
             <Text style={styles.closeButtonText}>Done</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
