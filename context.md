@@ -2,8 +2,8 @@
 
 > **Package**: `com.clancy.appace`  
 > **Stack**: React Native (TypeScript) + Expo SDK 54 + Kotlin Native Module (`screen-time`) + Room DB (v5) + Accessibility Service + UsageStatsManager + WorkManager  
-> **Current Version**: `0.9.3` (versionCode `93`)  
-> **Active Development Branch**: `fix/phase8-app-groups` (HEAD: `d8ff7ea`)  
+> **Current Version**: `0.9.4` (versionCode `94`)  
+> **Active Development Branch**: `fix/phase8-app-groups` (HEAD: `3bddd81`)  
 > **Target Device / OS**: Samsung Galaxy S24 (`R3CX908LHVM`) / Android 14+ (API 34)  
 
 ---
