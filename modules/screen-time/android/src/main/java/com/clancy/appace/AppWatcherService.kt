@@ -713,19 +713,28 @@ class AppWatcherService : AccessibilityService() {
         }
     }
 
-    private fun launchTimesUpScreen() {
-        // Launch Appace directly over the tracked app — secondary UX attempt
+    private fun launchTimesUpScreen(): Boolean {
+        // Launch Appace directly over the tracked app
         val intent = packageManager.getLaunchIntentForPackage(packageName)?.apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                    Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+            action = Intent.ACTION_MAIN
+            addCategory(Intent.CATEGORY_LAUNCHER)
         }
-        if (intent != null) {
+        return if (intent != null) {
             try {
                 startActivity(intent)
+                true
             } catch (e: Exception) {
                 scope.launch {
                     TelemetryLogger.log(applicationContext, "RAW_EVENT", "LaunchTimesUpScreenFailed: ${e.message}")
                 }
+                false
             }
+        } else {
+            false
         }
     }
 
@@ -734,11 +743,12 @@ class AppWatcherService : AccessibilityService() {
      *
      * 1. Cancels tracking notification and active drain loop.
      * 2. Clears [currentTrackedApp] and [currentGroupId] so subsequent events re-evaluate fresh.
-     * 3. Fires [GLOBAL_ACTION_HOME] immediately as the primary, guaranteed OS exit.
-     * 4. Attempts [launchTimesUpScreen] as secondary UX.
-     * 5. Runs a bounded verification loop (500ms interval, max 6 attempts = 3s).
+     * 3. Launches Appace immediately to redirect the user to their balance & group dashboard.
+     * 4. Runs a bounded verification loop (400ms interval, max 6 attempts = 2.4s).
+     *    - If the blocked app is still in the foreground after initial attempt, retries launch.
+     *    - If still stuck after 2 attempts, fires [GLOBAL_ACTION_HOME] as fallback hammer.
      *    - Logs [BLOCK_CLEARED] upon successful exit.
-     *    - Logs [BLOCK_EXHAUSTED] if the app remains in the foreground after all 6 attempts.
+     *    - Logs [BLOCK_EXHAUSTED] if the app remains in the foreground after all attempts.
      */
     private fun enforceBlockAndRedirect(pkg: String) {
         cancelTrackingNotification()
@@ -749,21 +759,18 @@ class AppWatcherService : AccessibilityService() {
         // Cancel previous verification loop if one is still running (prevents concurrent races)
         activeBlockJob?.cancel()
 
-        // 1. Primary: OS-level Home action (guaranteed capability of AccessibilityService)
-        performGlobalAction(GLOBAL_ACTION_HOME)
-
-        // 2. Secondary: Attempt to surface Appace
+        // 1. Primary: Launch Appace to bring the user to their dashboard
         launchTimesUpScreen()
 
-        // 3. Bounded verification loop: re-check rootInActiveWindow for up to 3s
+        // 2. Bounded verification loop: re-check rootInActiveWindow
         activeBlockJob = scope.launch {
-            TelemetryLogger.log(applicationContext, "BLOCK", "Enforced GLOBAL_ACTION_HOME for $pkg (0s remaining)")
+            TelemetryLogger.log(applicationContext, "BLOCK", "Enforced Appace redirect for $pkg (0s remaining)")
             var attempts = 0
             val maxAttempts = 6
             var cleared = false
 
             while (attempts < maxAttempts && isActive) {
-                delay(500)
+                delay(400)
                 attempts++
 
                 val foreground = try {
@@ -772,7 +779,7 @@ class AppWatcherService : AccessibilityService() {
                     null
                 }
 
-                // Clean exit condition: user has moved away from the blocked app
+                // Clean exit condition: user has moved away from the blocked app (to Appace or launcher)
                 if (foreground == null || foreground != pkg) {
                     cleared = true
                     TelemetryLogger.log(
@@ -782,13 +789,17 @@ class AppWatcherService : AccessibilityService() {
                     break
                 }
 
-                // Still in the blocked app: re-fire HOME action and retry
+                // Still in the blocked app: retry launching Appace
                 TelemetryLogger.log(
                     applicationContext, "BLOCK",
-                    "Re-enforcing GLOBAL_ACTION_HOME for $pkg (attempt $attempts/$maxAttempts)"
+                    "Re-enforcing block for $pkg (attempt $attempts/$maxAttempts)"
                 )
-                performGlobalAction(GLOBAL_ACTION_HOME)
                 launchTimesUpScreen()
+
+                // If Appace launch didn't take over foreground after 2 attempts, trigger HOME as fallback
+                if (attempts >= 2) {
+                    performGlobalAction(GLOBAL_ACTION_HOME)
+                }
             }
 
             if (!cleared && isActive) {
@@ -796,6 +807,7 @@ class AppWatcherService : AccessibilityService() {
                     applicationContext, "BLOCK_EXHAUSTED",
                     "Failed to clear $pkg after $maxAttempts attempts (still foreground)"
                 )
+                performGlobalAction(GLOBAL_ACTION_HOME)
             }
         }
     }
