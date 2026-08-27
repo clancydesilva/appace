@@ -378,17 +378,56 @@ class GroupBalanceRepositoryTest {
     }
 
     @Test
-    fun `deductFromGroup is no-op outside window`() = runBlocking {
-        val id = insertGroup(windowStart = 9, windowEnd = 22)
-        // Manually set a balance without ticking
+    fun `deductFromGroup deducts balance and resets streak even outside window hours`() = runBlocking {
+        val id = insertGroup(
+            windowStart = 9,
+            windowEnd = 22,
+            budgetType = "compounding",
+            compoundingBase = 300L,
+            compoundingCoefficient = 2f
+        )
+        // Manually set a balance and streak without ticking
         db.appGroupDao().updateGroup(
-            db.appGroupDao().getGroupById(id)!!.copy(balanceSeconds = 500L)
+            db.appGroupDao().getGroupById(id)!!.copy(
+                balanceSeconds = 500L,
+                compoundingStreak = 3
+            )
         )
 
-        GroupBalanceRepository.testDateTime = at(7) // before window
+        GroupBalanceRepository.testDateTime = at(7) // before window (7 AM)
         repo.deductFromGroup(id, 100L)
 
-        assertEquals(500L, db.appGroupDao().getGroupById(id)!!.balanceSeconds)
+        val g = db.appGroupDao().getGroupById(id)!!
+        assertEquals(400L, g.balanceSeconds)
+        // Delayed gratification reset: usage resets streak to 0 even outside window
+        assertEquals(0, g.compoundingStreak)
+    }
+
+    @Test
+    fun `leftover balance persists after windowEndHour until midnight reset`() = runBlocking {
+        val id = insertGroup(windowStart = 6, windowEnd = 22)
+        GroupBalanceRepository.testDateTime = at(14)
+        repo.tick() // grants opening + catch-up
+
+        val daytimeBalance = db.appGroupDao().getGroupById(id)!!.balanceSeconds
+        assertTrue(daytimeBalance > 0L)
+
+        // 1. Advance to 23:00 (outside window, after window close)
+        GroupBalanceRepository.testDateTime = at(23)
+        repo.tick()
+
+        // Step 2 is an early return; daytime balance must NOT be wiped at window close
+        val eveningGroup = db.appGroupDao().getGroupById(id)!!
+        assertEquals(daytimeBalance, eveningGroup.balanceSeconds)
+
+        // 2. Advance past midnight to 00:05 of next day
+        GroupBalanceRepository.testDateTime = LocalDateTime.of(TEST_DAY.plusDays(1), LocalTime.of(0, 5))
+        repo.tick()
+
+        // Step 1 midnight reset wipes balance to 0 for the new calendar day
+        val nextDayGroup = db.appGroupDao().getGroupById(id)!!
+        assertEquals(0L, nextDayGroup.balanceSeconds)
+        assertFalse(nextDayGroup.windowOpenGrantedToday)
     }
 
     @Test

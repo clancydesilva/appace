@@ -187,7 +187,7 @@ class GroupBalanceRepository(private val context: Context) {
 
     /**
      * Deducts [seconds] from [groupId]'s balance, floored at 0.
-     * Only deducts if the current time falls within the group's earning window.
+     * Operates 24/7 whenever tracked app usage occurs.
      * If [seconds] > 0, resets [AppGroupEntity.compoundingStreak] to 0 (delayed gratification reset).
      * No-op if the group does not exist.
      *
@@ -197,16 +197,13 @@ class GroupBalanceRepository(private val context: Context) {
     suspend fun deductFromGroup(groupId: Int, seconds: Long) = withContext(Dispatchers.IO) {
         mutex.withLock {
             val g = dao.getGroupById(groupId) ?: return@withLock
-            val hour = now().hour
-            if (hour >= g.windowStartHour && hour < g.windowEndHour) {
-                val newStreak = if (seconds > 0L) 0 else g.compoundingStreak
-                dao.updateGroup(
-                    g.copy(
-                        balanceSeconds = maxOf(0L, g.balanceSeconds - seconds),
-                        compoundingStreak = newStreak
-                    )
+            val newStreak = if (seconds > 0L) 0 else g.compoundingStreak
+            dao.updateGroup(
+                g.copy(
+                    balanceSeconds = maxOf(0L, g.balanceSeconds - seconds),
+                    compoundingStreak = newStreak
                 )
-            }
+            )
         }
     }
 

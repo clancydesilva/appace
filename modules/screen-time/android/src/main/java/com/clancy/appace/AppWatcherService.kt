@@ -305,14 +305,8 @@ class AppWatcherService : AccessibilityService() {
         } else {
             repo.getBalance().balanceSeconds
         }
-        val inWindow = if (groupId != null) {
-            val h = LocalDateTime.now().hour
-            h >= windowStart && h < windowEnd
-        } else {
-            repo.isWithinWindow()
-        }
 
-        if (initialBalance <= 0L && inWindow) {
+        if (initialBalance <= 0L) {
             withContext(Dispatchers.Main) { enforceBlockAndRedirect(pkg) }
             return
         }
@@ -323,20 +317,6 @@ class AppWatcherService : AccessibilityService() {
         while (currentTrackedApp == pkg && currentCoroutineContext().isActive) {
             delay(1000)
             if (currentTrackedApp != pkg || !currentCoroutineContext().isActive) break
-
-            // Window check — uses cached windowStart/windowEnd (KI-005: no DB read per tick).
-            val nowInWindow = if (groupId != null) {
-                val h = LocalDateTime.now().hour
-                h >= windowStart && h < windowEnd
-            } else {
-                repo.isWithinWindow()
-            }
-
-            if (!nowInWindow) {
-                lastDeductionTime = SystemClock.elapsedRealtime()
-                tickCount = 0
-                continue
-            }
 
             tickCount++
 
@@ -368,7 +348,7 @@ class AppWatcherService : AccessibilityService() {
                     "Tracked: $pkg${groupName?.let { " ($it)" } ?: ""}, Balance: ${lastKnownBalance}s"
                 )
 
-                if (lastKnownBalance <= 0L && nowInWindow) {
+                if (lastKnownBalance <= 0L) {
                     TelemetryLogger.log(applicationContext, "BLOCK", "Active limit hit inside $pkg (0s remaining)")
                     withContext(Dispatchers.Main) { enforceBlockAndRedirect(pkg) }
                     break
@@ -402,7 +382,7 @@ class AppWatcherService : AccessibilityService() {
                 }
                 lastKnownBalance = postAccrualBalance
 
-                if (postAccrualBalance <= 0L && nowInWindow) {
+                if (postAccrualBalance <= 0L) {
                     TelemetryLogger.log(applicationContext, "BLOCK", "Active limit hit inside $pkg (0s projected remaining)")
                     withContext(Dispatchers.Main) { enforceBlockAndRedirect(pkg) }
                     break
@@ -586,7 +566,7 @@ class AppWatcherService : AccessibilityService() {
                 }
 
                 // Zero-balance guard: enforce block immediately without posting tracking notification
-                if (initialBalance <= 0L && inWindow) {
+                if (initialBalance <= 0L) {
                     withContext(Dispatchers.Main) { enforceBlockAndRedirect(pkg) }
                     return@launch
                 }
@@ -701,7 +681,7 @@ class AppWatcherService : AccessibilityService() {
                     repo.isWithinWindow()
                 }
 
-                if (initialBalance <= 0L && inWindow) {
+                if (initialBalance <= 0L) {
                     withContext(Dispatchers.Main) { enforceBlockAndRedirect(foregroundPkg) }
                 } else {
                     val groupName = resumeGroupId?.let { groupIdToName[it] }
