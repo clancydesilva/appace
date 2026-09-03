@@ -283,6 +283,25 @@ class ExpoScreenTimeModule : Module() {
             context.startActivity(intent)
         }
 
+        AsyncFunction("isNotificationsEnabled") { ->
+            androidx.core.app.NotificationManagerCompat.from(context).areNotificationsEnabled()
+        }
+
+        AsyncFunction("openNotificationSettings") { ->
+            val intent = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                    putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+            } else {
+                Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                    data = android.net.Uri.parse("package:${context.packageName}")
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+            }
+            context.startActivity(intent)
+        }
+
         AsyncFunction("startForegroundService") { ->
             scope.launch {
                 repo.initIfEmpty()

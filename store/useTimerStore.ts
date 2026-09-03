@@ -16,6 +16,7 @@ interface TimerStore {
   accessibilityEnabled: boolean;
   batteryOptimizationIgnored: boolean;
   usageAccessGranted: boolean;
+  notificationsEnabled: boolean;
   onboardingCompleted: boolean;
   telemetryLogs: TelemetryLog[];
   appGroups: AppGroup[];
@@ -30,6 +31,7 @@ interface TimerStore {
   checkAccessibility: () => Promise<void>;
   checkBatteryOptimization: () => Promise<void>;
   checkUsageAccess: () => Promise<void>;
+  checkNotifications: () => Promise<void>;
   setWindowHours: (start: number, end: number) => Promise<void>;
   setOpeningBalance: (mins: number) => Promise<void>;
   setHourlyAccrual: (mins: number) => Promise<void>;
@@ -40,6 +42,7 @@ interface TimerStore {
   openAccessibilitySettings: () => Promise<void>;
   openBatteryOptimizationSettings: () => Promise<void>;
   openUsageAccessSettings: () => Promise<void>;
+  openNotificationSettings: () => Promise<void>;
   startService: () => Promise<void>;
   fetchTelemetryLogs: () => Promise<void>;
   clearTelemetryLogs: () => Promise<void>;
@@ -66,6 +69,7 @@ export const useTimerStore = create<TimerStore>((set, get) => ({
   accessibilityEnabled: false,
   batteryOptimizationIgnored: false,
   usageAccessGranted: false,
+  notificationsEnabled: false,
   onboardingCompleted: false,
   telemetryLogs: [],
   appGroups: [],
@@ -100,6 +104,7 @@ export const useTimerStore = create<TimerStore>((set, get) => ({
   checkAccessibility: async () => set({ accessibilityEnabled: await ScreenTime.isAccessibilityEnabled() }),
   checkBatteryOptimization: async () => set({ batteryOptimizationIgnored: await ScreenTime.isBatteryOptimizationIgnored() }),
   checkUsageAccess: async () => set({ usageAccessGranted: await ScreenTime.isUsageAccessGranted() }),
+  checkNotifications: async () => set({ notificationsEnabled: await ScreenTime.isNotificationsEnabled() }),
 
   setWindowHours: async (start, end) => {
     await ScreenTime.setWindowHours(start, end);
@@ -139,6 +144,7 @@ export const useTimerStore = create<TimerStore>((set, get) => ({
   openAccessibilitySettings: async () => ScreenTime.openAccessibilitySettings(),
   openBatteryOptimizationSettings: async () => ScreenTime.openBatteryOptimizationSettings(),
   openUsageAccessSettings: async () => ScreenTime.openUsageAccessSettings(),
+  openNotificationSettings: async () => ScreenTime.openNotificationSettings(),
   startService: async () => ScreenTime.startForegroundService(),
   fetchTelemetryLogs: async () => set({ telemetryLogs: await ScreenTime.getTelemetryLogs() }),
   clearTelemetryLogs: async () => {

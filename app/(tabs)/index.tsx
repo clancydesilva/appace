@@ -13,6 +13,7 @@ import {
 import { useRouter } from 'expo-router';
 import { useTimerStore } from '../../store/useTimerStore';
 import { GroupCard } from '../../components/home/GroupCard';
+import { PermissionHealthCard } from '../../components/home/PermissionHealthCard';
 import { AccessibilityDisclosureModal } from '../../components/AccessibilityDisclosureModal';
 
 export default function HomeScreen() {
@@ -34,7 +35,9 @@ export default function HomeScreen() {
     pollTimer.current = setInterval(() => {
       store.fetchAppGroups().catch(console.warn);
       store.checkAccessibility().catch(console.warn);
+      store.checkUsageAccess().catch(console.warn);
       store.checkBatteryOptimization().catch(console.warn);
+      store.checkNotifications().catch(console.warn);
     }, 10000);
 
     // 3. 1-second clock timer to smoothly advance progress bars and drop countdowns
@@ -68,8 +71,12 @@ export default function HomeScreen() {
     await new Promise((resolve) => setTimeout(resolve, 150));
     await store.fetchAppGroups();
     await store.fetchInstalledApps();
-    await store.checkAccessibility();
-    await store.checkBatteryOptimization();
+    await Promise.all([
+      store.checkAccessibility(),
+      store.checkUsageAccess(),
+      store.checkBatteryOptimization(),
+      store.checkNotifications(),
+    ]);
   };
 
   const handleManualRefresh = async () => {
@@ -122,32 +129,8 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* Permission Warning Banners */}
-        {!store.accessibilityEnabled && (
-          <TouchableOpacity
-            style={styles.warningBanner}
-            onPress={() => setDisclosureVisible(true)}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.warningTitle}>Accessibility Service Inactive</Text>
-            <Text style={styles.warningDesc}>
-              Appace cannot monitor app limits. Tap here to enable accessibility.
-            </Text>
-          </TouchableOpacity>
-        )}
-
-        {store.accessibilityEnabled && !store.batteryOptimizationIgnored && (
-          <TouchableOpacity
-            style={[styles.warningBanner, styles.warningBannerSubtle]}
-            onPress={() => store.openBatteryOptimizationSettings()}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.warningTitle}>Battery Optimization Active</Text>
-            <Text style={styles.warningDesc}>
-              Accruals may be delayed. Tap to allow unrestricted background execution.
-            </Text>
-          </TouchableOpacity>
-        )}
+        {/* Permission Health Warning Banner */}
+        <PermissionHealthCard onOpenAccessibility={() => setDisclosureVisible(true)} />
 
         {/* Group Cards List or Empty State */}
         {store.appGroups.length === 0 ? (
@@ -227,29 +210,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 0.5,
-  },
-  warningBanner: {
-    backgroundColor: '#1C0D0D',
-    borderWidth: 1,
-    borderColor: '#E74C3C',
-    borderRadius: 8,
-    padding: 14,
-    marginBottom: 16,
-  },
-  warningBannerSubtle: {
-    backgroundColor: '#1C160D',
-    borderColor: '#E67E22',
-  },
-  warningTitle: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  warningDesc: {
-    color: '#888888',
-    fontSize: 11,
-    marginTop: 4,
-    lineHeight: 15,
   },
   groupsContainer: {
     marginTop: 4,
