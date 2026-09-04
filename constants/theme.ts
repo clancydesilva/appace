@@ -10,3 +10,7 @@ export const Colors = {
     warning: '#E67E22',
     success: '#2ECC71',
 } as const;
+
+export const Typography = {
+    fontFamily: 'Bahnschrift',
+} as const;

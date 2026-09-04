@@ -2,10 +2,15 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { AppState } from 'react-native';
+import { useFonts } from 'expo-font';
 import { useTimerStore } from '../store/useTimerStore';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 
 export default function RootLayout() {
+  const [fontsLoaded] = useFonts({
+    Bahnschrift: require('../assets/fonts/Bahnschrift.ttf'),
+  });
+
   const store = useTimerStore();
   const router = useRouter();
   const segments = useSegments();
@@ -40,6 +45,10 @@ export default function RootLayout() {
       subscription.remove();
     };
   }, [segments, store.balanceSeconds, store.isWithinWindow]);
+
+  if (!fontsLoaded) {
+    return null;
+  }
 
   return (
     <ErrorBoundary>
