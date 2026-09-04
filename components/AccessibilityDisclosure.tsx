@@ -7,19 +7,36 @@ import { useTimerStore } from '../store/useTimerStore';
 interface AccessibilityDisclosureProps {
   onSettingsOpened?: () => void;
   onCancel?: () => void;
+  onSkip?: () => void;
   showStatus?: boolean;
   isModal?: boolean;
+  consent?: boolean;
+  onConsentChange?: (consent: boolean) => void;
 }
 
 export function AccessibilityDisclosure({
   onSettingsOpened,
   onCancel,
+  onSkip,
   showStatus = false,
   isModal = false,
+  consent,
+  onConsentChange,
 }: AccessibilityDisclosureProps) {
   const router = useRouter();
   const store = useTimerStore();
-  const [accessibilityConsent, setAccessibilityConsent] = useState(false);
+  const [localConsent, setLocalConsent] = useState(false);
+
+  const accessibilityConsent = consent !== undefined ? consent : localConsent;
+
+  const handleConsentToggle = () => {
+    const next = !accessibilityConsent;
+    if (onConsentChange) {
+      onConsentChange(next);
+    } else {
+      setLocalConsent(next);
+    }
+  };
 
   const handleOpenSettings = async () => {
     if (!accessibilityConsent) return;
@@ -42,7 +59,7 @@ export function AccessibilityDisclosure({
 
       <TouchableOpacity
         style={styles.consentCheckboxRow}
-        onPress={() => setAccessibilityConsent(!accessibilityConsent)}
+        onPress={handleConsentToggle}
         activeOpacity={0.7}
       >
         <View style={[styles.checkbox, accessibilityConsent ? styles.checkboxChecked : null]}>
@@ -84,8 +101,22 @@ export function AccessibilityDisclosure({
         onPress={handleOpenSettings}
         disabled={!accessibilityConsent}
       >
-        <Text style={styles.primaryButtonText}>Open Settings</Text>
+        <Text style={[styles.primaryButtonText, !accessibilityConsent && styles.primaryButtonTextDisabled]}>
+          Open Settings
+        </Text>
       </TouchableOpacity>
+
+      {onSkip && !store.accessibilityEnabled && (
+        <TouchableOpacity
+          style={[styles.secondaryButton, !accessibilityConsent && styles.secondaryButtonDisabled, { marginTop: 10 }]}
+          onPress={onSkip}
+          disabled={!accessibilityConsent}
+        >
+          <Text style={[styles.secondaryButtonText, !accessibilityConsent && styles.secondaryButtonTextDisabled]}>
+            Set Up Later
+          </Text>
+        </TouchableOpacity>
+      )}
 
       {isModal && onCancel && (
         <TouchableOpacity style={styles.secondaryButton} onPress={onCancel}>
@@ -228,6 +259,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#333333',
     opacity: 0.6,
   },
+  primaryButtonTextDisabled: {
+    color: '#888888',
+  },
   secondaryButton: {
     backgroundColor: 'transparent',
     borderWidth: 1,
@@ -238,9 +272,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginTop: 12,
   },
+  secondaryButtonDisabled: {
+    borderColor: '#222222',
+    opacity: 0.5,
+  },
   secondaryButtonText: {
     color: Colors.textSecondary,
     fontSize: 14,
     fontWeight: '600',
+  },
+  secondaryButtonTextDisabled: {
+    color: '#555555',
   },
 });

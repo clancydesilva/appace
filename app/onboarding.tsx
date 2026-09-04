@@ -116,7 +116,7 @@ export default function OnboardingScreen() {
 
         <View style={styles.contentContainer}>
           {step === 1 && <StepWelcome onNext={() => setStep(2)} />}
-          {step === 2 && <StepAccessibility />}
+          {step === 2 && <StepAccessibility onNext={() => setStep(3)} />}
           {step === 3 && <StepUsageAccess onNext={() => setStep(4)} />}
           {step === 4 && <StepBattery onNext={() => setStep(5)} />}
           {step === 5 && <StepNotifications onNext={() => setStep(6)} />}
