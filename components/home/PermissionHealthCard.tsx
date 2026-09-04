@@ -62,7 +62,6 @@ export function PermissionHealthCard({ onOpenAccessibility }: PermissionHealthCa
   return (
     <View style={styles.cardContainer}>
       <View style={styles.headerRow}>
-        <View style={styles.warningIndicator} />
         <Text style={styles.headerTitle}>SYSTEM PERMISSIONS NEED ATTENTION</Text>
       </View>
 
@@ -96,7 +95,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#161616',
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#332810',
+    borderColor: '#3A1818',
     padding: 16,
     marginBottom: 16,
   },
@@ -105,15 +104,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
   },
-  warningIndicator: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-    backgroundColor: '#EAB308',
-    marginRight: 8,
-  },
   headerTitle: {
-    color: '#EAB308',
+    color: '#EF4444',
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 0.8,
@@ -148,15 +140,15 @@ const styles = StyleSheet.create({
   },
   actionPill: {
     alignSelf: 'flex-start',
-    backgroundColor: '#262215',
+    backgroundColor: '#261515',
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#4A3B12',
+    borderColor: '#4A1818',
   },
   actionPillText: {
-    color: '#EAB308',
+    color: '#EF4444',
     fontSize: 11,
     fontWeight: '600',
   },

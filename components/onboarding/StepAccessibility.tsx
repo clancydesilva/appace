@@ -77,16 +77,16 @@ export function StepAccessibility({ onNext }: StepAccessibilityProps) {
 const styles = StyleSheet.create({
   badgeContainer: {
     alignSelf: 'flex-start',
-    backgroundColor: '#262215',
+    backgroundColor: '#261515',
     borderWidth: 1,
-    borderColor: '#4A3B12',
+    borderColor: '#4A1818',
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 6,
     marginBottom: 16,
   },
   badgeText: {
-    color: '#EAB308',
+    color: '#EF4444',
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 0.8,
