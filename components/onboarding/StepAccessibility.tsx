@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, BackHandler, StyleSheet } from 'react-native';
 import { AccessibilityDisclosure } from '../AccessibilityDisclosure';
 import { useTimerStore } from '../../store/useTimerStore';
+import { Typography } from '../../constants/theme';
 import { styles as commonStyles } from './styles';
 
 interface StepAccessibilityProps {
@@ -90,6 +91,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 0.8,
+    fontFamily: Typography.fontFamily,
   },
   buttonGroup: {
     marginTop: 24,
@@ -101,5 +103,7 @@ const styles = StyleSheet.create({
   backButtonText: {
     color: '#888888',
     fontSize: 13,
+    fontFamily: Typography.fontFamily,
   },
 });
+

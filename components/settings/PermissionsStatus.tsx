@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useTimerStore } from '../../store/useTimerStore';
-import { Colors } from '../../constants/theme';
+import { Colors, Typography } from '../../constants/theme';
 import { AccessibilityDisclosureModal } from '../AccessibilityDisclosureModal';
 import { UsageAccessDisclosureModal } from '../UsageAccessDisclosureModal';
 
@@ -124,6 +124,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     marginTop: 20,
     marginBottom: 10,
+    fontFamily: Typography.fontFamily,
   },
   listGroup: {
     backgroundColor: Colors.cardBg,
@@ -148,12 +149,14 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     fontSize: 14,
     fontWeight: '700',
+    fontFamily: Typography.fontFamily,
   },
   listRowDesc: {
     color: Colors.textMuted,
     fontSize: 11,
     marginTop: 3,
     lineHeight: 14,
+    fontFamily: Typography.fontFamily,
   },
   indicatorWrap: {
     flexDirection: 'row',
@@ -176,6 +179,7 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     fontSize: 10,
     fontWeight: '600',
+    fontFamily: Typography.fontFamily,
   },
   statusButton: {
     backgroundColor: Colors.textPrimary,
@@ -188,5 +192,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '800',
     textTransform: 'uppercase',
+    fontFamily: Typography.fontFamily,
   },
 });

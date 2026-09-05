@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useRouter, Href } from 'expo-router';
-import { Colors } from '../constants/theme';
+import { Colors, Typography } from '../constants/theme';
 import { useTimerStore } from '../store/useTimerStore';
 
 interface AccessibilityDisclosureProps {
@@ -145,6 +145,7 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     marginBottom: 16,
+    fontFamily: Typography.fontFamily,
   },
   disclosureContainer: {
     backgroundColor: Colors.cardBg,
@@ -161,11 +162,13 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+    fontFamily: Typography.fontFamily,
   },
   disclosureText: {
     color: '#CCCCCC',
     fontSize: 14,
     lineHeight: 22,
+    fontFamily: Typography.fontFamily,
   },
   consentCheckboxRow: {
     flexDirection: 'row',
@@ -191,12 +194,14 @@ const styles = StyleSheet.create({
     color: '#000000',
     fontSize: 13,
     fontWeight: 'bold',
+    fontFamily: Typography.fontFamily,
   },
   consentText: {
     color: Colors.textPrimary,
     fontSize: 15,
     fontWeight: '700',
     marginLeft: 12,
+    fontFamily: Typography.fontFamily,
   },
   privacyLinkContainer: {
     marginBottom: 20,
@@ -206,16 +211,19 @@ const styles = StyleSheet.create({
     color: '#3498db',
     fontSize: 14,
     fontWeight: 'bold',
+    fontFamily: Typography.fontFamily,
   },
   body: {
     color: '#AAAAAA',
     fontSize: 14,
     lineHeight: 22,
     marginBottom: 16,
+    fontFamily: Typography.fontFamily,
   },
   boldText: {
     color: Colors.textPrimary,
     fontWeight: 'bold',
+    fontFamily: Typography.fontFamily,
   },
   permissionStatusContainer: {
     flexDirection: 'row',
@@ -231,10 +239,12 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     fontSize: 13,
     marginRight: 8,
+    fontFamily: Typography.fontFamily,
   },
   permissionStatus: {
     fontSize: 13,
     fontWeight: 'bold',
+    fontFamily: Typography.fontFamily,
   },
   statusActive: {
     color: Colors.success,
@@ -254,6 +264,7 @@ const styles = StyleSheet.create({
     color: '#000000',
     fontSize: 15,
     fontWeight: 'bold',
+    fontFamily: Typography.fontFamily,
   },
   primaryButtonDisabled: {
     backgroundColor: '#333333',
@@ -280,6 +291,7 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     fontSize: 14,
     fontWeight: '600',
+    fontFamily: Typography.fontFamily,
   },
   secondaryButtonTextDisabled: {
     color: '#555555',

@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useTimerStore } from '../../store/useTimerStore';
+import { Typography } from '../../constants/theme';
 
 interface PermissionHealthCardProps {
   onOpenAccessibility: () => void;
@@ -109,6 +110,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 0.8,
+    fontFamily: Typography.fontFamily,
   },
   itemsList: {
     backgroundColor: '#1C1C1E',
@@ -132,11 +134,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     marginBottom: 4,
+    fontFamily: Typography.fontFamily,
   },
   itemReason: {
     color: '#999999',
     fontSize: 12,
     lineHeight: 16,
+    fontFamily: Typography.fontFamily,
   },
   actionPill: {
     alignSelf: 'flex-start',
@@ -151,5 +155,7 @@ const styles = StyleSheet.create({
     color: '#EF4444',
     fontSize: 11,
     fontWeight: '600',
+    fontFamily: Typography.fontFamily,
   },
 });
+

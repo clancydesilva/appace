@@ -12,6 +12,7 @@ import {
   Platform,
 } from 'react-native';
 import { AppGroup, InstalledApp } from '../../modules/screen-time';
+import { Typography } from '../../constants/theme';
 
 interface Props {
   visible: boolean;
@@ -275,16 +276,19 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 18,
     fontWeight: '800',
+    fontFamily: Typography.fontFamily,
   },
   appPkg: {
     color: '#666666',
     fontSize: 11,
     marginTop: 2,
+    fontFamily: Typography.fontFamily,
   },
   statusText: {
     color: '#AAAAAA',
     fontSize: 12,
     marginTop: 8,
+    fontFamily: Typography.fontFamily,
   },
   loadingBox: {
     paddingVertical: 50,
@@ -304,11 +308,13 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 1,
     marginBottom: 10,
+    fontFamily: Typography.fontFamily,
   },
   emptyGroupsText: {
     color: '#666666',
     fontSize: 13,
     marginBottom: 16,
+    fontFamily: Typography.fontFamily,
   },
   groupRow: {
     flexDirection: 'row',
@@ -333,11 +339,13 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '700',
+    fontFamily: Typography.fontFamily,
   },
   groupRowSub: {
     color: '#777777',
     fontSize: 11,
     marginTop: 2,
+    fontFamily: Typography.fontFamily,
   },
   radioCircle: {
     width: 20,
@@ -373,6 +381,7 @@ const styles = StyleSheet.create({
     color: '#AAAAAA',
     fontSize: 13,
     fontWeight: '700',
+    fontFamily: Typography.fontFamily,
   },
   createBox: {
     backgroundColor: '#1A1A1A',
@@ -386,6 +395,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     marginBottom: 8,
+    fontFamily: Typography.fontFamily,
   },
   createInput: {
     backgroundColor: '#111111',
@@ -396,6 +406,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 13,
     marginBottom: 12,
+    fontFamily: Typography.fontFamily,
   },
   createActionsRow: {
     flexDirection: 'row',
@@ -410,6 +421,7 @@ const styles = StyleSheet.create({
     color: '#777777',
     fontSize: 12,
     fontWeight: '600',
+    fontFamily: Typography.fontFamily,
   },
   createConfirmBtn: {
     backgroundColor: '#FFFFFF',
@@ -424,6 +436,7 @@ const styles = StyleSheet.create({
     color: '#000000',
     fontSize: 12,
     fontWeight: '800',
+    fontFamily: Typography.fontFamily,
   },
   removeButton: {
     backgroundColor: '#1E0F0F',
@@ -438,6 +451,7 @@ const styles = StyleSheet.create({
     color: '#E74C3C',
     fontSize: 13,
     fontWeight: '700',
+    fontFamily: Typography.fontFamily,
   },
   closeButton: {
     marginHorizontal: 20,
@@ -450,5 +464,6 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '700',
+    fontFamily: Typography.fontFamily,
   },
 });

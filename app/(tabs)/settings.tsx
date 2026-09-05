@@ -12,6 +12,7 @@ import { useRouter } from 'expo-router';
 import { useTimerStore } from '../../store/useTimerStore';
 import { PermissionsStatus } from '../../components/settings/PermissionsStatus';
 import { GroupSettings } from '../../components/settings/GroupSettings';
+import { Typography } from '../../constants/theme';
 
 export default function SettingsScreen() {
   const store = useTimerStore();
@@ -99,12 +100,14 @@ const styles = StyleSheet.create({
     fontSize: 26,
     fontWeight: '800',
     letterSpacing: -0.5,
+    fontFamily: Typography.fontFamily,
   },
   subtitle: {
     color: '#666666',
     fontSize: 13,
     marginTop: 4,
     lineHeight: 18,
+    fontFamily: Typography.fontFamily,
   },
   groupHeader: {
     color: '#888888',
@@ -114,6 +117,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     marginTop: 20,
     marginBottom: 10,
+    fontFamily: Typography.fontFamily,
   },
   listGroup: {
     backgroundColor: '#141414',
@@ -138,11 +142,13 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '700',
+    fontFamily: Typography.fontFamily,
   },
   listItemValue: {
     color: '#888888',
     fontSize: 12,
     marginTop: 3,
+    fontFamily: Typography.fontFamily,
   },
   statusButton: {
     backgroundColor: '#FFFFFF',
@@ -155,5 +161,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '800',
     textTransform: 'uppercase',
+    fontFamily: Typography.fontFamily,
   },
 });

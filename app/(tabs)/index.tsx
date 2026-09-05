@@ -15,6 +15,7 @@ import { useTimerStore } from '../../store/useTimerStore';
 import { GroupCard } from '../../components/home/GroupCard';
 import { PermissionHealthCard } from '../../components/home/PermissionHealthCard';
 import { AccessibilityDisclosureModal } from '../../components/AccessibilityDisclosureModal';
+import { Typography } from '../../constants/theme';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -189,6 +190,7 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '900',
     letterSpacing: 2,
+    fontFamily: Typography.fontFamily,
   },
   dateSubtitle: {
     color: '#666666',
@@ -196,6 +198,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 1,
     marginTop: 2,
+    fontFamily: Typography.fontFamily,
   },
   addGroupButton: {
     backgroundColor: '#1C1C1C',
@@ -210,6 +213,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 0.5,
+    fontFamily: Typography.fontFamily,
   },
   groupsContainer: {
     marginTop: 4,
@@ -243,6 +247,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     marginBottom: 8,
     textAlign: 'center',
+    fontFamily: Typography.fontFamily,
   },
   emptySubtitle: {
     color: '#777777',
@@ -250,6 +255,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     textAlign: 'center',
     marginBottom: 24,
+    fontFamily: Typography.fontFamily,
   },
   emptyActionButton: {
     backgroundColor: '#FFFFFF',
@@ -261,5 +267,6 @@ const styles = StyleSheet.create({
     color: '#000000',
     fontSize: 13,
     fontWeight: '800',
+    fontFamily: Typography.fontFamily,
   },
 });

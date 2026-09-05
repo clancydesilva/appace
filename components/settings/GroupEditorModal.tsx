@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { AppGroup, CreateGroupInput, InstalledApp } from '../../modules/screen-time';
 import { formatHourLabel } from '../../utils/formatTime';
+import { Typography } from '../../constants/theme';
 
 interface Props {
   visible: boolean;
@@ -752,6 +753,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 18,
     fontWeight: '800',
+    fontFamily: Typography.fontFamily,
   },
   closeBtn: {
     padding: 4,
@@ -760,6 +762,7 @@ const styles = StyleSheet.create({
     color: '#777777',
     fontSize: 16,
     fontWeight: 'bold',
+    fontFamily: Typography.fontFamily,
   },
   loadingBox: {
     paddingVertical: 60,
@@ -769,6 +772,7 @@ const styles = StyleSheet.create({
     color: '#888888',
     fontSize: 13,
     marginTop: 12,
+    fontFamily: Typography.fontFamily,
   },
   scrollArea: {
     flexShrink: 1,
@@ -787,23 +791,27 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 1,
     marginBottom: 6,
+    fontFamily: Typography.fontFamily,
   },
   fieldHint: {
     color: '#555555',
     fontSize: 12,
     lineHeight: 16,
     marginBottom: 8,
+    fontFamily: Typography.fontFamily,
   },
   subLabel: {
     color: '#AAAAAA',
     fontSize: 11,
     fontWeight: '600',
     marginBottom: 4,
+    fontFamily: Typography.fontFamily,
   },
   helperText: {
     color: '#666666',
     fontSize: 11,
     marginTop: 4,
+    fontFamily: Typography.fontFamily,
   },
   textInput: {
     backgroundColor: '#1C1C1C',
@@ -813,6 +821,7 @@ const styles = StyleSheet.create({
     padding: 12,
     color: '#FFFFFF',
     fontSize: 14,
+    fontFamily: Typography.fontFamily,
   },
   twoColumnRow: {
     flexDirection: 'row',
@@ -844,9 +853,11 @@ const styles = StyleSheet.create({
     color: '#777777',
     fontSize: 12,
     fontWeight: '700',
+    fontFamily: Typography.fontFamily,
   },
   presetTabTextActive: {
     color: '#000000',
+    fontFamily: Typography.fontFamily,
   },
   presetInfoCard: {
     backgroundColor: '#1A1A1A',
@@ -860,12 +871,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     marginBottom: 4,
+    fontFamily: Typography.fontFamily,
   },
   presetFormulaLine: {
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '600',
-    fontFamily: 'monospace',
+    fontFamily: Typography.fontFamily,
     marginBottom: 8,
   },
   formulaSummaryRow: {
@@ -884,17 +896,20 @@ const styles = StyleSheet.create({
     color: '#888888',
     fontSize: 11,
     fontWeight: '600',
+    fontFamily: Typography.fontFamily,
   },
   formulaSummaryValue: {
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '800',
+    fontFamily: Typography.fontFamily,
   },
   presetInfoDesc: {
     color: '#777777',
     fontSize: 12,
     lineHeight: 16,
     marginTop: 4,
+    fontFamily: Typography.fontFamily,
   },
   compoundingBox: {
     backgroundColor: '#1A1A1A',
@@ -917,6 +932,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 0.8,
     marginBottom: 6,
+    fontFamily: Typography.fontFamily,
   },
   progressionRow: {
     flexDirection: 'row',
@@ -930,11 +946,13 @@ const styles = StyleSheet.create({
     color: '#AAAAAA',
     fontSize: 11,
     fontWeight: '500',
+    fontFamily: Typography.fontFamily,
   },
   progressionVal: {
     color: '#FFFFFF',
     fontSize: 11,
     fontWeight: '700',
+    fontFamily: Typography.fontFamily,
   },
   resetNoticeText: {
     color: '#888888',
@@ -942,6 +960,7 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     lineHeight: 15,
     marginTop: 6,
+    fontFamily: Typography.fontFamily,
   },
   customBox: {
     backgroundColor: '#1A1A1A',
@@ -970,10 +989,12 @@ const styles = StyleSheet.create({
     color: '#777777',
     fontSize: 11,
     fontWeight: '600',
+    fontFamily: Typography.fontFamily,
   },
   subTypeBtnTextActive: {
     color: '#FFFFFF',
     fontWeight: '700',
+    fontFamily: Typography.fontFamily,
   },
   sectionHeaderRow: {
     flexDirection: 'row',
@@ -985,11 +1006,13 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '700',
+    fontFamily: Typography.fontFamily,
   },
   emptyAppsNotice: {
     color: '#555555',
     fontSize: 12,
     fontStyle: 'italic',
+    fontFamily: Typography.fontFamily,
   },
   assignedChipsWrap: {
     flexDirection: 'row',
@@ -1013,6 +1036,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     marginRight: 6,
+    fontFamily: Typography.fontFamily,
   },
   removeChipBtn: {
     padding: 2,
@@ -1021,6 +1045,7 @@ const styles = StyleSheet.create({
     color: '#888888',
     fontSize: 11,
     fontWeight: 'bold',
+    fontFamily: Typography.fontFamily,
   },
   addAppsContainer: {
     marginTop: 12,
@@ -1039,6 +1064,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 12,
     marginBottom: 8,
+    fontFamily: Typography.fontFamily,
   },
   addAppsScroll: {
     maxHeight: 160,
@@ -1063,11 +1089,13 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '600',
+    fontFamily: Typography.fontFamily,
   },
   otherGroupNotice: {
     color: '#E67E22',
     fontSize: 10,
     marginTop: 2,
+    fontFamily: Typography.fontFamily,
   },
   checkbox: {
     width: 18,
@@ -1086,6 +1114,7 @@ const styles = StyleSheet.create({
     color: '#000000',
     fontSize: 10,
     fontWeight: '900',
+    fontFamily: Typography.fontFamily,
   },
   saveButton: {
     backgroundColor: '#FFFFFF',
@@ -1099,6 +1128,7 @@ const styles = StyleSheet.create({
     color: '#000000',
     fontSize: 14,
     fontWeight: '800',
+    fontFamily: Typography.fontFamily,
   },
   deleteButton: {
     backgroundColor: '#1A0C0C',
@@ -1113,5 +1143,6 @@ const styles = StyleSheet.create({
     color: '#E74C3C',
     fontSize: 13,
     fontWeight: '700',
+    fontFamily: Typography.fontFamily,
   },
 });

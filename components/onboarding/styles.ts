@@ -1,4 +1,5 @@
 import { StyleSheet, Platform } from 'react-native';
+import { Typography } from '../../constants/theme';
 
 export const styles = StyleSheet.create({
   safeArea: {
@@ -23,6 +24,7 @@ export const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '900',
     letterSpacing: 2,
+    fontFamily: Typography.fontFamily,
   },
   indicatorContainer: {
     flexDirection: 'row',
@@ -64,21 +66,25 @@ export const styles = StyleSheet.create({
     fontSize: 26,
     fontWeight: 'bold',
     marginBottom: 16,
+    fontFamily: Typography.fontFamily,
   },
   subtitle: {
     color: '#888888',
     fontSize: 14,
     marginBottom: 24,
+    fontFamily: Typography.fontFamily,
   },
   body: {
     color: '#CCCCCC',
     fontSize: 15,
     lineHeight: 24,
     marginBottom: 16,
+    fontFamily: Typography.fontFamily,
   },
   boldText: {
     color: '#FFFFFF',
     fontWeight: 'bold',
+    fontFamily: Typography.fontFamily,
   },
   diagramContainer: {
     backgroundColor: '#141414',
@@ -95,6 +101,7 @@ export const styles = StyleSheet.create({
     marginBottom: 16,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+    fontFamily: Typography.fontFamily,
   },
   diagramTimeline: {
     flexDirection: 'row',
@@ -110,12 +117,14 @@ export const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: 'bold',
     textAlign: 'center',
+    fontFamily: Typography.fontFamily,
   },
   timelineSub: {
     color: '#666666',
     fontSize: 8,
     marginTop: 4,
     textAlign: 'center',
+    fontFamily: Typography.fontFamily,
   },
   timelineBar: {
     width: 20,
@@ -131,6 +140,7 @@ export const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     marginBottom: 8,
+    fontFamily: Typography.fontFamily,
   },
   textInput: {
     backgroundColor: '#141414',
@@ -140,11 +150,13 @@ export const styles = StyleSheet.create({
     padding: 12,
     color: '#FFFFFF',
     fontSize: 15,
+    fontFamily: Typography.fontFamily,
   },
   helperText: {
     color: '#555555',
     fontSize: 12,
     marginTop: 4,
+    fontFamily: Typography.fontFamily,
   },
   summaryPanel: {
     backgroundColor: '#141414',
@@ -162,11 +174,13 @@ export const styles = StyleSheet.create({
     textTransform: 'uppercase',
     marginBottom: 8,
     letterSpacing: 0.5,
+    fontFamily: Typography.fontFamily,
   },
   summaryText: {
     color: '#BBBBBB',
     fontSize: 14,
     lineHeight: 20,
+    fontFamily: Typography.fontFamily,
   },
   summaryCalc: {
     color: '#888888',
@@ -175,10 +189,12 @@ export const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderColor: '#222222',
     paddingTop: 8,
+    fontFamily: Typography.fontFamily,
   },
   highlightText: {
     color: '#FFFFFF',
     fontWeight: '600',
+    fontFamily: Typography.fontFamily,
   },
   permissionStatusContainer: {
     flexDirection: 'row',
@@ -194,16 +210,20 @@ export const styles = StyleSheet.create({
     color: '#888888',
     fontSize: 14,
     marginRight: 8,
+    fontFamily: Typography.fontFamily,
   },
   permissionStatus: {
     fontSize: 14,
     fontWeight: 'bold',
+    fontFamily: Typography.fontFamily,
   },
   activeText: {
     color: '#FFFFFF',
+    fontFamily: Typography.fontFamily,
   },
   inactiveText: {
     color: '#E74C3C',
+    fontFamily: Typography.fontFamily,
   },
   searchInput: {
     backgroundColor: '#141414',
@@ -214,6 +234,7 @@ export const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 14,
     marginBottom: 16,
+    fontFamily: Typography.fontFamily,
   },
   loadingContainer: {
     flex: 1,
@@ -224,6 +245,7 @@ export const styles = StyleSheet.create({
     color: '#666666',
     fontSize: 12,
     marginTop: 12,
+    fontFamily: Typography.fontFamily,
   },
   appList: {
     flex: 1,
@@ -254,11 +276,13 @@ export const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '600',
+    fontFamily: Typography.fontFamily,
   },
   appPkg: {
     color: '#555555',
     fontSize: 11,
     marginTop: 2,
+    fontFamily: Typography.fontFamily,
   },
   checkbox: {
     width: 20,
@@ -277,6 +301,7 @@ export const styles = StyleSheet.create({
     color: '#000000',
     fontSize: 12,
     fontWeight: 'bold',
+    fontFamily: Typography.fontFamily,
   },
   primaryButton: {
     backgroundColor: '#FFFFFF',
@@ -289,6 +314,7 @@ export const styles = StyleSheet.create({
     color: '#000000',
     fontSize: 15,
     fontWeight: 'bold',
+    fontFamily: Typography.fontFamily,
   },
   primaryButtonDisabled: {
     backgroundColor: '#333',
@@ -306,11 +332,13 @@ export const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '600',
+    fontFamily: Typography.fontFamily,
   },
   textInputDisabled: {
     backgroundColor: '#0F0F0F',
     borderColor: '#181818',
     color: '#555555',
+    fontFamily: Typography.fontFamily,
   },
   presetContainer: {
     flexDirection: 'row',
@@ -340,13 +368,16 @@ export const styles = StyleSheet.create({
     color: '#888888',
     fontSize: 13,
     fontWeight: '600',
+    fontFamily: Typography.fontFamily,
   },
   presetTabTextActive: {
     color: '#000000',
     fontWeight: 'bold',
+    fontFamily: Typography.fontFamily,
   },
   presetTabTextDisabled: {
     color: '#555555',
+    fontFamily: Typography.fontFamily,
   },
   presetDescPanel: {
     backgroundColor: '#141414',
@@ -361,11 +392,13 @@ export const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: 'bold',
     marginBottom: 6,
+    fontFamily: Typography.fontFamily,
   },
   presetDescText: {
     color: '#888888',
     fontSize: 12,
     lineHeight: 16,
+    fontFamily: Typography.fontFamily,
   },
   disclosureContainer: {
     backgroundColor: '#141414',
@@ -381,11 +414,13 @@ export const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginBottom: 8,
     textTransform: 'uppercase',
+    fontFamily: Typography.fontFamily,
   },
   disclosureText: {
     color: '#CCCCCC',
     fontSize: 14,
     lineHeight: 22,
+    fontFamily: Typography.fontFamily,
   },
   consentCheckboxRow: {
     flexDirection: 'row',
@@ -398,6 +433,7 @@ export const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     marginLeft: 12,
+    fontFamily: Typography.fontFamily,
   },
   createdGroupsContainer: {
     backgroundColor: '#141414',
@@ -413,6 +449,7 @@ export const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 0.8,
     marginBottom: 8,
+    fontFamily: Typography.fontFamily,
   },
   createdGroupRow: {
     flexDirection: 'row',
@@ -426,10 +463,13 @@ export const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '700',
+    fontFamily: Typography.fontFamily,
   },
   createdGroupCount: {
     color: '#888888',
     fontSize: 11,
     fontWeight: '600',
+    fontFamily: Typography.fontFamily,
   },
 });
+
