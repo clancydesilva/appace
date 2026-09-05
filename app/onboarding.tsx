@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, SafeAreaView, KeyboardAvoidingView, AppState, AppStateStatus } from 'react-native';
+import { View, SafeAreaView, KeyboardAvoidingView, AppState, AppStateStatus } from 'react-native';
+import { Text } from '../components/Text';
 import { useRouter } from 'expo-router';
 import { useTimerStore } from '../store/useTimerStore';
 import { StepWelcome } from '../components/onboarding/StepWelcome';

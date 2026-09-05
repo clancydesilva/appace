@@ -1,19 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  TextInput,
-  TouchableOpacity,
-  ActivityIndicator,
-  SafeAreaView,
-} from 'react-native';
+import { View, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, SafeAreaView } from 'react-native';
+import { Text, TextInput } from '../../components/Text';
 import { useTimerStore } from '../../store/useTimerStore';
 import { InstalledApp, CreateGroupInput } from '../../modules/screen-time';
 import { GroupPickerModal } from '../../components/apps/GroupPickerModal';
 import { GroupEditorModal } from '../../components/settings/GroupEditorModal';
-import { Typography } from '../../constants/theme';
 
 export default function AppsScreen() {
   const store = useTimerStore();
@@ -227,14 +218,12 @@ const styles = StyleSheet.create({
     fontSize: 26,
     fontWeight: '800',
     letterSpacing: -0.5,
-    fontFamily: Typography.fontFamily,
   },
   subtitle: {
     color: '#666666',
     fontSize: 13,
     marginTop: 4,
     lineHeight: 18,
-    fontFamily: Typography.fontFamily,
   },
   searchInput: {
     backgroundColor: '#141414',
@@ -245,7 +234,6 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 13,
     marginBottom: 14,
-    fontFamily: Typography.fontFamily,
   },
   listContent: {
     paddingBottom: 24,
@@ -270,13 +258,11 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '700',
-    fontFamily: Typography.fontFamily,
   },
   appPkg: {
     color: '#555555',
     fontSize: 11,
     marginTop: 2,
-    fontFamily: Typography.fontFamily,
   },
   groupBadge: {
     paddingHorizontal: 10,
@@ -296,7 +282,6 @@ const styles = StyleSheet.create({
   groupBadgeText: {
     fontSize: 11,
     fontWeight: '700',
-    fontFamily: Typography.fontFamily,
   },
   groupBadgeTextActive: {
     color: '#FFFFFF',
@@ -313,7 +298,6 @@ const styles = StyleSheet.create({
     color: '#555555',
     fontSize: 12,
     marginTop: 12,
-    fontFamily: Typography.fontFamily,
   },
   emptyContainer: {
     paddingVertical: 40,
@@ -322,6 +306,5 @@ const styles = StyleSheet.create({
   emptyText: {
     color: '#555555',
     fontSize: 13,
-    fontFamily: Typography.fontFamily,
   },
 });

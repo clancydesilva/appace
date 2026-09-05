@@ -1,14 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  TextInput,
-  ActivityIndicator,
-  FlatList,
-  ScrollView,
-  Alert,
-} from 'react-native';
+import { View, TouchableOpacity, ActivityIndicator, FlatList, ScrollView, Alert } from 'react-native';
+import { Text, TextInput } from '../Text';
 import { styles } from './styles';
 import { useTimerStore } from '../../store/useTimerStore';
 import { CreateGroupInput, InstalledApp } from '../../modules/screen-time';

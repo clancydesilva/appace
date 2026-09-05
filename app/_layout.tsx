@@ -5,6 +5,7 @@ import { AppState } from 'react-native';
 import { useFonts } from 'expo-font';
 import { useTimerStore } from '../store/useTimerStore';
 import { ErrorBoundary } from '../components/ErrorBoundary';
+import { Typography } from '../constants/theme';
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
@@ -53,7 +54,7 @@ export default function RootLayout() {
   return (
     <ErrorBoundary>
       <StatusBar style="light" />
-      <Stack screenOptions={{ headerShown: false }}>
+      <Stack screenOptions={{ headerShown: false, headerTitleStyle: { fontFamily: Typography.fontFamily } }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="privacy" options={{ presentation: 'fullScreenModal' }} />
         <Stack.Screen name="onboarding" />

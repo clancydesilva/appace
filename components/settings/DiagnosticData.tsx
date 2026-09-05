@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Modal, SafeAreaView, ActivityIndicator, FlatList } from 'react-native';
+import { View, TouchableOpacity, StyleSheet, Modal, SafeAreaView, ActivityIndicator, FlatList } from 'react-native';
+import { Text } from '../Text';
 import { useTimerStore } from '../../store/useTimerStore';
-import { Colors, Typography } from '../../constants/theme';
+import { Colors } from '../../constants/theme';
 import { useRouter } from 'expo-router';
 
 export function DiagnosticData() {
@@ -187,7 +188,6 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     marginTop: 20,
     marginBottom: 10,
-    fontFamily: Typography.fontFamily,
   },
   listGroup: {
     backgroundColor: Colors.cardBg,
@@ -212,13 +212,11 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     fontSize: 14,
     fontWeight: '700',
-    fontFamily: Typography.fontFamily,
   },
   listItemValue: {
     color: Colors.textSecondary,
     fontSize: 12,
     marginTop: 3,
-    fontFamily: Typography.fontFamily,
   },
   listItemButton: {
     backgroundColor: Colors.textPrimary,
@@ -231,7 +229,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '800',
     textTransform: 'uppercase',
-    fontFamily: Typography.fontFamily,
   },
   modalContainer: {
     flex: 1,
@@ -251,7 +248,6 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     fontSize: 18,
     fontWeight: 'bold',
-    fontFamily: Typography.fontFamily,
   },
   modalCloseButton: {
     padding: 8,
@@ -262,7 +258,6 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     fontSize: 12,
     fontWeight: 'bold',
-    fontFamily: Typography.fontFamily,
   },
   modalContent: {
     flex: 1,
@@ -288,19 +283,16 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: 'bold',
     marginBottom: 8,
-    fontFamily: Typography.fontFamily,
   },
   statValue: {
     color: Colors.textPrimary,
     fontSize: 20,
     fontWeight: '900',
-    fontFamily: Typography.fontFamily,
   },
   statSubtext: {
     color: Colors.textMuted,
     fontSize: 10,
     marginTop: 4,
-    fontFamily: Typography.fontFamily,
   },
   logSectionHeader: {
     flexDirection: 'row',
@@ -312,13 +304,11 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     fontSize: 16,
     fontWeight: 'bold',
-    fontFamily: Typography.fontFamily,
   },
   clearLogsText: {
     color: Colors.error,
     fontSize: 12,
     fontWeight: 'bold',
-    fontFamily: Typography.fontFamily,
   },
   modalListContent: {
     paddingBottom: 40,
@@ -331,7 +321,6 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     marginTop: 12,
     fontSize: 12,
-    fontFamily: Typography.fontFamily,
   },
   logRow: {
     backgroundColor: Colors.cardBg,
@@ -356,24 +345,20 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 9,
     fontWeight: 'bold',
-    fontFamily: Typography.fontFamily,
   },
   logBattery: {
     color: Colors.textSecondary,
     fontSize: 11,
     marginRight: 10,
-    fontFamily: Typography.fontFamily,
   },
   logTime: {
     color: Colors.textMuted,
     fontSize: 11,
-    fontFamily: Typography.fontFamily,
   },
   logDetails: {
     color: Colors.textPrimary,
     fontSize: 13,
     lineHeight: 18,
-    fontFamily: Typography.fontFamily,
   },
   emptyLogsContainer: {
     alignItems: 'center',
@@ -383,7 +368,6 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     fontSize: 14,
     fontWeight: 'bold',
-    fontFamily: Typography.fontFamily,
   },
   emptyLogsSub: {
     color: Colors.textMuted,
@@ -391,6 +375,5 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textAlign: 'center',
     paddingHorizontal: 20,
-    fontFamily: Typography.fontFamily,
   },
 });

@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, TouchableOpacity, StyleSheet } from 'react-native';
+import { Text } from '../Text';
 import { useTimerStore } from '../../store/useTimerStore';
 import { AppGroup, CreateGroupInput } from '../../modules/screen-time';
 import { GroupEditorModal } from './GroupEditorModal';
 import { formatHourLabel } from '../../utils/formatTime';
-import { Typography } from '../../constants/theme';
 
 export function GroupSettings() {
   const store = useTimerStore();
@@ -133,7 +133,6 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 18,
     fontWeight: '800',
-    fontFamily: Typography.fontFamily,
   },
   sectionSubtitle: {
     color: '#666666',
@@ -141,7 +140,6 @@ const styles = StyleSheet.create({
     marginTop: 2,
     maxWidth: 240,
     lineHeight: 16,
-    fontFamily: Typography.fontFamily,
   },
   addBtn: {
     backgroundColor: '#1E1E1E',
@@ -155,7 +153,6 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '700',
-    fontFamily: Typography.fontFamily,
   },
   emptyCard: {
     backgroundColor: '#141414',
@@ -170,13 +167,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     marginBottom: 4,
-    fontFamily: Typography.fontFamily,
   },
   emptyText: {
     color: '#666666',
     fontSize: 12,
     textAlign: 'center',
-    fontFamily: Typography.fontFamily,
   },
   groupsList: {
     gap: 12,
@@ -203,13 +198,11 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '800',
-    fontFamily: Typography.fontFamily,
   },
   groupAppsCount: {
     color: '#777777',
     fontSize: 12,
     fontWeight: '600',
-    fontFamily: Typography.fontFamily,
   },
   badge: {
     backgroundColor: '#1F1F1F',
@@ -223,7 +216,6 @@ const styles = StyleSheet.create({
     color: '#AAAAAA',
     fontSize: 10,
     fontWeight: '700',
-    fontFamily: Typography.fontFamily,
   },
   groupCardMeta: {
     gap: 4,
@@ -234,7 +226,6 @@ const styles = StyleSheet.create({
   metaText: {
     color: '#888888',
     fontSize: 12,
-    fontFamily: Typography.fontFamily,
   },
   editIndicator: {
     marginTop: 8,
@@ -244,6 +235,5 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     textAlign: 'right',
-    fontFamily: Typography.fontFamily,
   },
 });

@@ -1,5 +1,6 @@
 ﻿import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, Platform, PermissionsAndroid } from 'react-native';
+import { View, TouchableOpacity, Platform, PermissionsAndroid } from 'react-native';
+import { Text } from '../Text';
 import { styles } from './styles';
 
 interface Props {

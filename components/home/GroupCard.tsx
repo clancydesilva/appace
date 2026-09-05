@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { Text } from '../Text';
 import { AppGroup, InstalledApp } from '../../modules/screen-time';
 import { calculateGroupNextDrop } from '../../utils/budget';
 import { formatHourLabel } from '../../utils/formatTime';
-import { Typography } from '../../constants/theme';
 
 interface Props {
   group: AppGroup;
@@ -171,13 +171,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '800',
     letterSpacing: 0.5,
-    fontFamily: Typography.fontFamily,
   },
   appsSubtitle: {
     color: '#777777',
     fontSize: 12,
     marginTop: 3,
-    fontFamily: Typography.fontFamily,
   },
   badge: {
     backgroundColor: '#202020',
@@ -192,7 +190,6 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: '800',
     letterSpacing: 0.5,
-    fontFamily: Typography.fontFamily,
   },
   timerContainer: {
     alignItems: 'center',
@@ -204,7 +201,6 @@ const styles = StyleSheet.create({
     fontWeight: '200',
     letterSpacing: -1,
     fontVariant: ['tabular-nums'],
-    fontFamily: Typography.fontFamily,
   },
   timerLabel: {
     color: '#555555',
@@ -212,7 +208,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 1.5,
     marginTop: 4,
-    fontFamily: Typography.fontFamily,
   },
   accrualSection: {
     marginTop: 12,
@@ -234,12 +229,10 @@ const styles = StyleSheet.create({
   accrualText: {
     color: '#777777',
     fontSize: 12,
-    fontFamily: Typography.fontFamily,
   },
   boldText: {
     color: '#FFFFFF',
     fontWeight: '700',
-    fontFamily: Typography.fontFamily,
   },
   outsideWindowBox: {
     paddingVertical: 4,
@@ -250,7 +243,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     letterSpacing: 0.5,
     textTransform: 'uppercase',
-    fontFamily: Typography.fontFamily,
   },
   emergencyContainer: {
     borderTopWidth: 1,
@@ -269,13 +261,11 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 1,
-    fontFamily: Typography.fontFamily,
   },
   emergencyRemaining: {
     color: '#888888',
     fontSize: 11,
     fontWeight: '600',
-    fontFamily: Typography.fontFamily,
   },
   chipsRow: {
     flexDirection: 'row',
@@ -301,11 +291,9 @@ const styles = StyleSheet.create({
     color: '#000000',
     fontSize: 11,
     fontWeight: '800',
-    fontFamily: Typography.fontFamily,
   },
   chipTextDisabled: {
     color: '#555555',
-    fontFamily: Typography.fontFamily,
   },
 });
 

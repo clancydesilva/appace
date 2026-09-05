@@ -1,9 +1,10 @@
 import React from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Platform } from 'react-native';
+import { View, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Platform } from 'react-native';
+import { Text } from '../components/Text';
 import { useRouter } from 'expo-router';
 import Markdown from 'react-native-markdown-display';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, Typography } from '../constants/theme';
+import { Colors } from '../constants/theme';
 import { PRIVACY_POLICY_MD } from '../constants/PrivacyPolicy';
 
 export default function PrivacyScreen() {
@@ -55,7 +56,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     letterSpacing: 1,
     textTransform: 'uppercase',
-    fontFamily: Typography.fontFamily,
   },
   placeholder: {
     width: 32, // Matches close button width
@@ -81,7 +81,6 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     marginTop: 16,
     fontSize: 14,
-    fontFamily: Typography.fontFamily,
   },
   errorText: {
     color: Colors.textSecondary,
@@ -89,7 +88,6 @@ const styles = StyleSheet.create({
     marginTop: 16,
     marginBottom: 24,
     lineHeight: 22,
-    fontFamily: Typography.fontFamily,
   },
   retryButton: {
     paddingVertical: 12,
@@ -102,7 +100,6 @@ const styles = StyleSheet.create({
   retryText: {
     color: Colors.textPrimary,
     fontWeight: 'bold',
-    fontFamily: Typography.fontFamily,
   },
 });
 
@@ -111,7 +108,6 @@ const markdownStyles = StyleSheet.create({
     color: Colors.textSecondary,
     fontSize: 15,
     lineHeight: 24,
-    fontFamily: Typography.fontFamily,
   },
   heading1: {
     color: Colors.textPrimary,
@@ -119,7 +115,6 @@ const markdownStyles = StyleSheet.create({
     fontWeight: 'bold',
     marginTop: 16,
     marginBottom: 16,
-    fontFamily: Typography.fontFamily,
   },
   heading2: {
     color: Colors.textPrimary,
@@ -130,7 +125,6 @@ const markdownStyles = StyleSheet.create({
     borderBottomWidth: 1,
     borderColor: Colors.border,
     paddingBottom: 8,
-    fontFamily: Typography.fontFamily,
   },
   heading3: {
     color: Colors.textPrimary,
@@ -138,28 +132,23 @@ const markdownStyles = StyleSheet.create({
     fontWeight: 'bold',
     marginTop: 16,
     marginBottom: 8,
-    fontFamily: Typography.fontFamily,
   },
   strong: {
     color: Colors.textPrimary,
     fontWeight: 'bold',
-    fontFamily: Typography.fontFamily,
   },
   em: {
     fontStyle: 'italic',
-    fontFamily: Typography.fontFamily,
   },
   bullet_list: {
     marginBottom: 16,
   },
   list_item: {
     marginVertical: 4,
-    fontFamily: Typography.fontFamily,
   },
   link: {
     color: '#3498db',
     textDecorationLine: 'none',
-    fontFamily: Typography.fontFamily,
   },
   hr: {
     backgroundColor: Colors.border,

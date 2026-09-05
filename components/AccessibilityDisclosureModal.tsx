@@ -1,5 +1,6 @@
 import React from 'react';
 import { Modal, View, StyleSheet, TouchableWithoutFeedback } from 'react-native';
+
 import { AccessibilityDisclosure } from './AccessibilityDisclosure';
 import { Colors } from '../constants/theme';
 
