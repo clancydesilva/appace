@@ -109,12 +109,11 @@ export function AccessibilityDisclosure({
 
       {onSkip && !store.accessibilityEnabled && (
         <TouchableOpacity
-          style={[styles.secondaryButton, !accessibilityConsent && styles.secondaryButtonDisabled, { marginTop: 10 }]}
+          style={[styles.secondaryButton, { marginTop: 10 }]}
           onPress={onSkip}
-          disabled={!accessibilityConsent}
         >
-          <Text style={[styles.secondaryButtonText, !accessibilityConsent && styles.secondaryButtonTextDisabled]}>
-            Set Up Later
+          <Text style={styles.secondaryButtonText}>
+            Skip for now
           </Text>
         </TouchableOpacity>
       )}
@@ -273,16 +272,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginTop: 12,
   },
-  secondaryButtonDisabled: {
-    borderColor: '#222222',
-    opacity: 0.5,
-  },
   secondaryButtonText: {
     color: Colors.textSecondary,
     fontSize: 14,
     fontWeight: '600',
-  },
-  secondaryButtonTextDisabled: {
-    color: '#555555',
   },
 });

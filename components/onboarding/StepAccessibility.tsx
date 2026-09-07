@@ -39,7 +39,7 @@ export function StepAccessibility({ onNext }: StepAccessibilityProps) {
         <View style={styles.buttonGroup}>
           <TouchableOpacity
             style={[commonStyles.primaryButton, { marginBottom: 12 }]}
-            onPress={() => store.openAccessibilitySettings()}
+            onPress={() => setShowImpactWarning(false)}
             activeOpacity={0.8}
           >
             <Text style={commonStyles.primaryButtonText}>Grant Permission</Text>

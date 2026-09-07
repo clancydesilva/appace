@@ -4,6 +4,25 @@ Use this file to log every test run, errors encountered, changes made, and verif
 
 ---
 
+## [2026-09-07 10:00] Accessibility Skip & Grant Flow Fix & 0.9.12 Packaging
+
+* **Branch**: `fix/accessibility-skip-and-grant-flow`
+* **Test Goal**: Enable clicking "Skip for now" on the Accessibility prominent disclosure without requiring user consent. Update "Grant Permission" on the critical impact warning screen to navigate back to the disclosure view so users can tick consent before opening system settings. Package and install release APK 0.9.12 (versionCode 102).
+* **Changes Made**:
+  1. `components/AccessibilityDisclosure.tsx`: Removed `disabled={!accessibilityConsent}` and disabled styles from the skip button; updated button label to "Skip for now". Removed dead style rules.
+  2. `components/onboarding/StepAccessibility.tsx`: Updated "Grant Permission" onPress on the impact warning dialog to call `setShowImpactWarning(false)` to return to the prominent disclosure screen.
+  3. `app.json` & `android/app/build.gradle`: Sequentially bumped version to `0.9.12` (versionCode 102).
+* **Commands**:
+  * `npx tsc --noEmit` (TypeScript type check: 0 errors)
+  * `./gradlew test` (Robolectric & Android unit tests: BUILD SUCCESSFUL)
+  * `./gradlew assembleRelease` (Release APK packaging: BUILD SUCCESSFUL in 2m 59s)
+  * `adb -s emulator-5554 install -r apks/appace-0.9.12.apk` (Installed successfully on emulator-5554)
+* **Result — PASSED**:
+  * Release APK built: `apks/appace-0.9.12.apk`.
+  * Emulator verified: App booted with version 0.9.12 (code 102).
+
+---
+
 ## [2026-09-07 09:42] Bahnschrift Bold Registration & 0.9.11 Packaging (Emulator Validation)
 
 * **Branch**: `phase/home-permission-health-banner`
