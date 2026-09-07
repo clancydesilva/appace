@@ -17,9 +17,10 @@ Use this file to log every test run, errors encountered, changes made, and verif
   * `./gradlew test` (Robolectric & Android unit tests: BUILD SUCCESSFUL)
   * `./gradlew assembleRelease` (Release APK packaging: BUILD SUCCESSFUL in 2m 59s)
   * `adb -s emulator-5554 install -r apks/appace-0.9.12.apk` (Installed successfully on emulator-5554)
+  * `adb -s R3CX908LHVM install -r apks/appace-0.9.12.apk` (Installed successfully on Samsung Galaxy S24 R3CX908LHVM)
 * **Result — PASSED**:
   * Release APK built: `apks/appace-0.9.12.apk`.
-  * Emulator verified: App booted with version 0.9.12 (code 102).
+  * Verified: App installed and launched with version `0.9.12` (`versionCode 102`) on both Android emulator and physical Samsung Galaxy S24.
 
 ---
 
