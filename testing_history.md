@@ -4,6 +4,29 @@ Use this file to log every test run, errors encountered, changes made, and verif
 
 ---
 
+## [2026-09-07 09:42] Bahnschrift Bold Registration & 0.9.11 Packaging (Emulator Validation)
+
+* **Branch**: `phase/home-permission-health-banner`
+* **Test Goal**: Fix Android React Native Roboto fallback on bold custom fonts (`Bahnschrift`) and third-party Markdown rendering. Validate and install release build for Appace 0.9.11 (versionCode 101) on Android Emulator (`emulator-5554`).
+* **Root Cause Identified**: `expo-font` only registers `Typeface.NORMAL` in `ReactFontManager`. Android cannot synthesize bold for custom TTF font families without a registered bold variant or matching `_bold.ttf` asset, silently falling back to system default (Roboto Bold) whenever `fontWeight: 'bold'`, `'600'`, or `'900'` is applied.
+* **Changes Made**:
+  1. `MainApplication.kt`: Registered `Bahnschrift` with `ReactFontManager` under `Typeface.NORMAL`, `Typeface.BOLD`, `Typeface.ITALIC`, and `Typeface.BOLD_ITALIC` using `Typeface.create(typeface, Typeface.BOLD)`.
+  2. `app/privacy.tsx`: Added `fontFamily: Typography.fontFamily` to all markdown rules (`body`, `heading1`, `heading2`, `heading3`, `strong`, `em`, `link`, `list_item`, `blockquote`).
+  3. `app.json` & `build.gradle`: Sequentially bumped version to `0.9.11` (versionCode 101).
+* **Commands**:
+  * `npx tsc --noEmit` (TypeScript type check)
+  * `./gradlew test` (Android Robolectric & unit test suite)
+  * `./gradlew assembleRelease` (Release APK packaging)
+  * `adb -s emulator-5554 install apks/appace-0.9.11.apk`
+* **Result — PASSED**:
+  * TypeScript type check: 0 errors.
+  * Gradle test: 550 tasks passed (BUILD SUCCESSFUL in 6m 43s).
+  * Gradle assembleRelease: BUILD SUCCESSFUL in 3m 34s.
+  * Emulator screenshot verification: "APPACE", "Reclaim Your Focus", "Configure Budget", and timeline labels successfully render in true Bahnschrift Bold with single-storey "a" (`ɑ`).
+
+---
+
+
 ## [2026-08-25 19:16] Release 0.9.4 Packaging & Validation
 
 * **Branch**: `fix/phase8-app-groups`
