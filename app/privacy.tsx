@@ -4,7 +4,7 @@ import { Text } from '../components/Text';
 import { useRouter } from 'expo-router';
 import Markdown from 'react-native-markdown-display';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../constants/theme';
+import { Colors, Typography } from '../constants/theme';
 import { PRIVACY_POLICY_MD } from '../constants/PrivacyPolicy';
 
 export default function PrivacyScreen() {
@@ -108,6 +108,7 @@ const markdownStyles = StyleSheet.create({
     color: Colors.textSecondary,
     fontSize: 15,
     lineHeight: 24,
+    fontFamily: Typography.fontFamily,
   },
   heading1: {
     color: Colors.textPrimary,
@@ -115,6 +116,7 @@ const markdownStyles = StyleSheet.create({
     fontWeight: 'bold',
     marginTop: 16,
     marginBottom: 16,
+    fontFamily: Typography.fontFamily,
   },
   heading2: {
     color: Colors.textPrimary,
@@ -125,6 +127,7 @@ const markdownStyles = StyleSheet.create({
     borderBottomWidth: 1,
     borderColor: Colors.border,
     paddingBottom: 8,
+    fontFamily: Typography.fontFamily,
   },
   heading3: {
     color: Colors.textPrimary,
@@ -132,23 +135,28 @@ const markdownStyles = StyleSheet.create({
     fontWeight: 'bold',
     marginTop: 16,
     marginBottom: 8,
+    fontFamily: Typography.fontFamily,
   },
   strong: {
     color: Colors.textPrimary,
     fontWeight: 'bold',
+    fontFamily: Typography.fontFamily,
   },
   em: {
     fontStyle: 'italic',
+    fontFamily: Typography.fontFamily,
   },
   bullet_list: {
     marginBottom: 16,
   },
   list_item: {
     marginVertical: 4,
+    fontFamily: Typography.fontFamily,
   },
   link: {
     color: '#3498db',
     textDecorationLine: 'none',
+    fontFamily: Typography.fontFamily,
   },
   hr: {
     backgroundColor: Colors.border,
@@ -163,6 +171,7 @@ const markdownStyles = StyleSheet.create({
     paddingVertical: 12,
     marginVertical: 16,
     borderRadius: 4,
+    fontFamily: Typography.fontFamily,
   },
 });
 
