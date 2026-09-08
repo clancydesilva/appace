@@ -199,3 +199,17 @@ dependencies {
     implementation "androidx.room:room-ktx:2.6.1"
     ksp "androidx.room:room-compiler:2.6.1"
 }
+
+tasks.register("syncPrivacyPolicy") {
+    doLast {
+        exec {
+            workingDir rootProject.projectDir.parentFile
+            if (System.getProperty('os.name').toLowerCase().contains('windows')) {
+                commandLine 'cmd', '/c', 'node', 'scripts/sync-privacy.js'
+            } else {
+                commandLine 'node', 'scripts/sync-privacy.js'
+            }
+        }
+    }
+}
+preBuild.dependsOn syncPrivacyPolicy
