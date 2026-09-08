@@ -1,3 +1,6 @@
+// AUTO-GENERATED from privacy_policy.md — DO NOT EDIT DIRECTLY.
+// Run "npm run sync-privacy" to update.
+
 export const PRIVACY_POLICY_MD = `
 # Privacy Policy for Appace
 

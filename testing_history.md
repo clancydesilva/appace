@@ -4,6 +4,26 @@ Use this file to log every test run, errors encountered, changes made, and verif
 
 ---
 
+## [2026-09-08 13:45] GitHub Pages Privacy Policy & Markdown Sync Automation
+
+* **Branch**: `privacy-policy`
+* **Test Goal**: Implement GitHub Pages `index.html` to host the official Appace Privacy Policy directly rendering `privacy_policy.md` with offline fallback. Add synchronization tool (`scripts/sync-privacy.js`) and npm scripts (`sync-privacy`, `check-privacy`) to guarantee in-app and web policies never drift.
+* **Changes Made**:
+  1. `index.html`: Created standalone dark-mode responsive GitHub Page that dynamically fetches and renders `privacy_policy.md` via `marked.js` with semantic HTML static fallback.
+  2. `scripts/sync-privacy.js`: Built synchronization utility that generates `constants/PrivacyPolicy.ts` directly from `privacy_policy.md` and validates parity with `--check`.
+  3. `package.json`: Added `sync-privacy` and `check-privacy` npm scripts.
+  4. `constants/PrivacyPolicy.ts`: Synchronized and added auto-generation header comments.
+* **Commands**:
+  * `npm run check-privacy` (Parity validation: PASSED)
+  * `npm run sync-privacy` (Markdown sync: PASSED)
+  * `npx tsc --noEmit` (TypeScript type check: 0 errors)
+  * `./gradlew test` (Robolectric & Android unit tests: BUILD SUCCESSFUL)
+  * Local HTTP server & browser validation (`http://localhost:8085/index.html`): Verified 200 OK responses, complete markdown rendering, and styled layout.
+* **Result — PASSED**:
+  * Web and in-app privacy policies are strictly synchronized and powered by `privacy_policy.md` as the single source of truth.
+
+---
+
 ## [2026-09-07 10:00] Accessibility Skip & Grant Flow Fix & 0.9.12 Packaging
 
 * **Branch**: `fix/accessibility-skip-and-grant-flow`

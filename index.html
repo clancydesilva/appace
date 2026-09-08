@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Policy — Appace</title>
+  <meta name="description" content="Official Privacy Policy for Appace — 100% offline, privacy-first Android screen time management.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <!-- Lightweight Markdown parser for client-side rendering -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+  <style>
+    :root {
+      --bg-color: #0d0d0d;
+      --card-bg: #141414;
+      --card-border: #222222;
+      --text-primary: #f5f5f7;
+      --text-secondary: #999999;
+      --accent: #ffffff;
+      --accent-badge: #1a1a1a;
+      --accent-badge-text: #00d26a;
+      --code-bg: #1e1e1e;
+      --font-main: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-color);
+      color: var(--text-primary);
+      font-family: var(--font-main);
+      line-height: 1.65;
+      font-size: 16px;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      padding: 0 16px;
+    }
+
+    .container {
+      max-width: 820px;
+      margin: 0 auto;
+      padding: 40px 0 80px 0;
+    }
+
+    /* Top Branding Bar */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 24px;
+      border-bottom: 1px solid var(--card-border);
+      margin-bottom: 36px;
+    }
+
+    .brand-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+    }
+
+    .brand-logo {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      background: #ffffff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 18px;
+      color: #000000;
+      letter-spacing: -0.5px;
+    }
+
+    .brand-name {
+      font-size: 20px;
+      font-weight: 800;
+      color: var(--text-primary);
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--accent-badge);
+      border: 1px solid #2a2a2a;
+      color: var(--accent-badge-text);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 6px 12px;
+      border-radius: 20px;
+      letter-spacing: 0.2px;
+    }
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      background-color: var(--accent-badge-text);
+      border-radius: 50%;
+      box-shadow: 0 0 8px rgba(0, 210, 106, 0.6);
+    }
+
+    /* Policy Card Container */
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 40px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+    }
+
+    @media (max-width: 640px) {
+      .card {
+        padding: 24px;
+      }
+    }
+
+    /* Markdown Rendered Content Styles */
+    .markdown-body h1 {
+      font-size: 32px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      color: var(--accent);
+      margin-bottom: 8px;
+    }
+
+    .markdown-body p:first-of-type strong {
+      color: #888888;
+      font-size: 14px;
+      font-weight: 500;
+      display: block;
+      margin-bottom: 24px;
+    }
+
+    .markdown-body h2 {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-top: 36px;
+      margin-bottom: 14px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--card-border);
+      letter-spacing: -0.2px;
+    }
+
+    .markdown-body h3 {
+      font-size: 17px;
+      font-weight: 600;
+      color: #e0e0e0;
+      margin-top: 20px;
+      margin-bottom: 8px;
+    }
+
+    .markdown-body p {
+      color: var(--text-secondary);
+      font-size: 15px;
+      line-height: 1.7;
+      margin-bottom: 14px;
+    }
+
+    .markdown-body p strong {
+      color: var(--text-primary);
+    }
+
+    .markdown-body ul {
+      margin: 10px 0 16px 20px;
+      color: var(--text-secondary);
+    }
+
+    .markdown-body li {
+      margin-bottom: 8px;
+      font-size: 15px;
+      line-height: 1.6;
+    }
+
+    .markdown-body li strong {
+      color: var(--text-primary);
+    }
+
+    .markdown-body code {
+      background: var(--code-bg);
+      color: #f1f1f1;
+      padding: 3px 7px;
+      border-radius: 5px;
+      font-size: 13px;
+      font-family: var(--font-mono);
+      border: 1px solid #2a2a2a;
+    }
+
+    /* Footer */
+    footer {
+      text-align: center;
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 1px solid var(--card-border);
+      color: #666666;
+      font-size: 13px;
+    }
+
+    footer a {
+      color: #888888;
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+
+    footer a:hover {
+      color: #ffffff;
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="brand-group">
+        <div class="brand-logo">A</div>
+        <div class="brand-name">Appace</div>
+      </div>
+      <div class="status-badge">
+        <span class="status-dot"></span>
+        100% Offline & Private
+      </div>
+    </header>
+
+    <main class="card">
+      <div id="content" class="markdown-body">
+        <!-- Static pre-rendered fallback ensuring zero-latency rendering & crawler/offline compatibility -->
+        <h1>Privacy Policy for Appace</h1>
+        <p><strong>Last Updated:</strong> June 2026</p>
+        <p>Welcome to Appace ("we," "our," or "us"). Your privacy is incredibly important to us. This Privacy Policy explains how Appace handles data on your Android device.</p>
+        
+        <h2>1. Data Collection & Offline Functionality</h2>
+        <p>Appace is designed to be a <strong>100% offline application</strong>.</p>
+        <ul>
+          <li>We <strong>do not</strong> collect, transmit, or sell any of your personal information.</li>
+          <li>We <strong>do not</strong> maintain servers to store your data.</li>
+          <li>All screen time budgets, app usage statistics, and configuration settings are stored locally in a private database on your device.</li>
+        </ul>
+
+        <h2>2. AccessibilityService API Usage</h2>
+        <p>Appace strictly requires the Android <strong>AccessibilityService API</strong> to function properly.</p>
+        
+        <h3>Why we need it</h3>
+        <p>We use the Accessibility API solely to detect when you launch an application on your device. This allows us to track your usage of "tracked" apps and deduct time from your screen time budget accordingly.</p>
+
+        <h3>What data we access</h3>
+        <p>When you open an app, the Accessibility API provides us with the "Package Name" (e.g., <code>com.instagram.android</code>) of the active window. We use this to determine if the app is on your restricted list.</p>
+
+        <h3>What we DO NOT do</h3>
+        <ul>
+          <li>We <strong>do not</strong> read, record, or monitor the content on your screen (such as your messages, passwords, photos, or browser history).</li>
+          <li>We <strong>do not</strong> log your keystrokes.</li>
+          <li>We <strong>do not</strong> transmit your app usage history off your device. All monitoring is processed securely and entirely locally.</li>
+        </ul>
+
+        <h2>3. Data Retention and Deletion</h2>
+        <p>Because all data is stored locally on your device via the Room Database:</p>
+        <ul>
+          <li>You have complete control over your data.</li>
+          <li>You can delete all your screen time history and settings at any time simply by clearing the app data in your Android Settings or by uninstalling Appace.</li>
+        </ul>
+
+        <h2>4. Third-Party Services</h2>
+        <p>Appace does not integrate with any third-party analytics trackers, crash reporters, or advertising networks.</p>
+
+        <h2>5. Changes to This Privacy Policy</h2>
+        <p>We may update our Privacy Policy from time to time. Since the app is entirely offline, any updates to the policy will only reflect changes in local functionality or permissions required by the Android operating system. We will notify you of any major changes by updating the "Last Updated" date at the top of this page.</p>
+
+        <h2>6. Contact Us</h2>
+        <p>If you have any questions or suggestions regarding our Privacy Policy, please contact the developer via the GitHub repository or the email provided in the Google Play Store listing.</p>
+      </div>
+    </main>
+
+    <footer>
+      <p>&copy; 2026 Appace. Built with React Native, Expo & Kotlin. <a href="https://github.com/clancydesilva/appace" target="_blank" rel="noopener">View GitHub Repository</a></p>
+    </footer>
+  </div>
+
+  <script>
+    // Dynamically fetch and render privacy_policy.md when served over HTTP/HTTPS (e.g., GitHub Pages)
+    // Ensures the web page always displays the latest markdown commit from privacy_policy.md
+    if (typeof marked !== 'undefined' && window.location.protocol.startsWith('http')) {
+      fetch('./privacy_policy.md')
+        .then(function(res) {
+          if (!res.ok) throw new Error('Network response was not ok');
+          return res.text();
+        })
+        .then(function(markdown) {
+          if (markdown && markdown.trim().length > 0) {
+            document.getElementById('content').innerHTML = marked.parse(markdown);
+          }
+        })
+        .catch(function(err) {
+          // Keep pre-rendered static HTML fallback if fetch fails
+          console.info('Using pre-rendered privacy policy fallback:', err);
+        });
+    }
+  </script>
+</body>
+</html>
